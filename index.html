@@ -515,6 +515,26 @@
                   <button id="btn-monitor-refresh" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm">Atualizar</button>
                 </div>
               </div>
+
+              <div class="grid sm:grid-cols-4 gap-2 mb-3 text-sm">
+                <div class="p-2 bg-slate-50 border rounded">
+                  <div class="text-slate-500">Latência atual</div>
+                  <div id="lat-last-ms" class="font-semibold">—</div>
+                </div>
+                <div class="p-2 bg-slate-50 border rounded">
+                  <div class="text-slate-500">Latência média</div>
+                  <div id="lat-avg-ms" class="font-semibold">—</div>
+                </div>
+                <div class="p-2 bg-slate-50 border rounded">
+                  <div class="text-slate-500">Status de rede</div>
+                  <div id="lat-net-status" class="font-semibold">—</div>
+                </div>
+                <div class="p-2 bg-slate-50 border rounded">
+                  <div class="text-slate-500">Última atualização</div>
+                  <div id="lat-last-ok" class="font-semibold">—</div>
+                </div>
+              </div>
+
               <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                   <thead class="text-slate-500">
@@ -721,6 +741,49 @@
   let poll = null;
   let refreshInFlight = false;
   let lastDataSignature = '';
+  const latencyStats = {
+    lastMs: 0,
+    avgMs: 0,
+    samples: 0,
+    failCount: 0,
+    lastOkAt: 0
+  };
+
+  function pushLatencySample(ms, ok){
+    const t = Number(ms||0);
+    if(ok){
+      latencyStats.lastMs = t;
+      latencyStats.samples = Math.min(latencyStats.samples + 1, 50);
+      if(latencyStats.avgMs <= 0) latencyStats.avgMs = t;
+      else latencyStats.avgMs = Math.round((latencyStats.avgMs * 0.8) + (t * 0.2));
+      latencyStats.failCount = 0;
+      latencyStats.lastOkAt = Date.now();
+    }else{
+      latencyStats.failCount = Math.min(latencyStats.failCount + 1, 99);
+    }
+  }
+
+  function renderLatencyAdmin(){
+    const last = byId('lat-last-ms');
+    const avg = byId('lat-avg-ms');
+    const st  = byId('lat-net-status');
+    const ok  = byId('lat-last-ok');
+    if(!last || !avg || !st || !ok) return;
+
+    last.textContent = latencyStats.lastMs ? `${latencyStats.lastMs} ms` : '—';
+    avg.textContent  = latencyStats.avgMs  ? `${latencyStats.avgMs} ms`  : '—';
+
+    let statusTxt = 'Sem dados';
+    if(latencyStats.failCount >= 2) statusTxt = 'Instável';
+    else if(latencyStats.avgMs > 1500) statusTxt = 'Lenta';
+    else if(latencyStats.avgMs > 700) statusTxt = 'Média';
+    else if(latencyStats.avgMs > 0) statusTxt = 'Boa';
+    st.textContent = statusTxt;
+
+    ok.textContent = latencyStats.lastOkAt
+      ? new Date(latencyStats.lastOkAt).toLocaleTimeString('pt-BR')
+      : '—';
+  }
 
   function getPollingIntervalMs(){
     try{
@@ -774,8 +837,11 @@
         return { isOk:true, skipped:true };
       }
       refreshInFlight = true;
+      const t0 = Date.now();
       const r = await callSafe('getAllSenhas');
       try{
+        pushLatencySample(Date.now() - t0, !!(r && r.ok));
+        renderLatencyAdmin();
         if (r && r.ok && Array.isArray(r.value) && this.h?.onDataChanged){
           const sig = dataSignature(r.value);
           if (opts.forceNotify || sig !== lastDataSignature){
@@ -2569,6 +2635,7 @@ function renderBars(obj){
 /* Monitor ao vivo (Admin) */
 function renderMonitor(){
   const body = byId('monitor-body');
+  renderLatencyAdmin();
   const sel = byId('numero-guiches').value;
   const n = (sel==='custom') ? (parseInt(byId('numero-guiches-custom').value,10)||6) : (parseInt(sel,10)||6);
   const linhas=[];
