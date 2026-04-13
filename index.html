@@ -1,0 +1,2712 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sistema de Chamados CadÚnico</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{box-sizing:border-box}
+    [x-cloak]{display:none!important}
+    .blink{animation:blink 1s infinite}
+    @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:.35}}
+    .btn-wait{opacity:.7;cursor:not-allowed;position:relative}
+    .btn-wait::after{content:"";position:absolute;right:12px;top:50%;width:16px;height:16px;margin-top:-8px;border:2px solid rgba(255,255,255,.7);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.5);display:flex;align-items:center;justify-content:center;z-index:60}
+    .card{ background:#fff; border:1px solid rgba(2,6,23,.06); border-radius:16px; box-shadow:0 10px 30px rgba(2,6,23,.06); }
+
+    .bar{height:10px;border-radius:6px;background:#e2e8f0;overflow:hidden}
+    .bar > i{display:block;height:100%;background:#0ea5e9}
+    .chip{display:inline-flex;align-items:center;gap:.4rem;padding:.15rem .5rem;border-radius:999px;font-size:.75rem}
+    .chip-blue{background:#e0f2fe;color:#075985}
+    .chip-green{background:#dcfce7;color:#065f46}
+    .chip-yellow{background:#fef9c3;color:#854d0e}
+    .chip-red{background:#fee2e2;color:#7f1d1d}
+    .chip-gray{background:#e2e8f0;color:#334155}
+
+    /* Overlay de áudio para a Tela TV */
+    #audio-unlock{position:fixed;inset:0;display:none;place-items:center;background:rgba(2,6,23,.55);z-index:70}
+    #audio-unlock .inner{background:#0b1220;color:#fff;padding:22px;border-radius:14px;box-shadow:0 20px 40px rgba(2,6,23,.4);text-align:center;max-width:520px}
+    #audio-unlock button{background:#22c55e;color:#0b1220;font-weight:700;border:none;padding:10px 16px;border-radius:10px}
+
+    .clickable{cursor:pointer}
+  </style>
+</head>
+<body class="min-h-full bg-blue-50 text-slate-800">
+
+<!-- NAVBAR (sem salvar/importar aqui) -->
+<nav class="bg-blue-800 text-white p-4 shadow-lg">
+  <div class="max-w-7xl mx-auto flex justify-between items-center">
+    <h1 id="titulo-sistema" class="text-xl sm:text-2xl font-bold">Sistema de Chamados CadÚnico</h1>
+    <div class="flex flex-wrap gap-2 items-center">
+      <button type="button" id="btn-recepcao" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-medium">Recepção</button>
+      <button type="button" id="btn-guiche"   class="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded-lg font-medium">Guichê</button>
+      <button type="button" id="btn-tv"       class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg font-medium">Tela TV</button>
+      <button type="button" id="btn-admin"    class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-medium">Admin</button>
+    </div>
+  </div>
+</nav>
+
+<div id="app" class="min-h-full">
+
+  <!-- ========== RECEPÇÃO ========== -->
+  <section id="tela-recepcao" class="max-w-5xl mx-auto p-6">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h2 class="text-2xl font-bold text-center mb-6">Cadastro de Senhas</h2>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Gerar Nova -->
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Gerar Nova Senha</h3>
+          <form id="form-nova-senha" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Nome da Pessoa</label>
+              <input id="nome-pessoa" type="text" required class="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500" placeholder="Digite o nome completo">
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">CPF (opcional)</label>
+              <input id="cpf-pessoa" type="text" maxlength="14" class="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500" placeholder="000.000.000-00">
+            </div>
+            <!-- Bairro como SELECT obrigatório vindo da configuração -->
+            <div>
+              <label class="block text-sm font-medium mb-1">
+                Bairro <span class="text-red-500">*</span>
+              </label>
+              <select id="bairro-pessoa" required class="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                <!-- opções preenchidas via JS -->
+              </select>
+              <p class="mt-1 text-xs text-slate-500">Lista de bairros configurada no painel Admin.</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Tipo de Atendimento</label>
+              <select id="tipo-servico" class="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                <option value="normal">N — Atendimento Normal</option>
+                <option value="prioritario">P — Atendimento Preferencial</option>
+                <option value="agendamento">G — Agendamento</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between">
+                <label class="block text-sm font-medium mb-2">Serviço Solicitado</label>
+                <label class="flex items-center gap-2 text-sm">
+                  <input id="print-auto" type="checkbox" class="rounded border-slate-300">
+                  Imprimir automaticamente
+                </label>
+              </div>
+              <div id="servicos-lista" class="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto"></div>
+            </div>
+
+            <button id="btn-submit-gerar" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold">
+              Gerar Senha
+            </button>
+          </form>
+
+          <div id="ultima-senha" class="mt-6 p-4 rounded-lg border border-green-300 bg-green-50 hidden">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm text-green-800 font-semibold">Senha Gerada</div>
+                <div class="text-2xl font-black text-green-900" id="numero-gerado">—</div>
+                <div class="text-base text-green-700" id="nome-gerado">—</div>
+                <div class="text-sm text-green-700" id="tipo-gerado">—</div>
+              </div>
+              <div class="flex flex-col gap-2">
+                <button id="btn-imprimir-ultima" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">Imprimir</button>
+                <button id="btn-reimprimir-ultima" class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg">Reimprimir</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estatísticas rápidas -->
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Estatísticas do Dia</h3>
+          <div class="space-y-3">
+            <div class="flex justify-between"><span>Senhas Geradas:</span><span id="total-senhas" class="font-semibold">0</span></div>
+            <div class="flex justify-between"><span>Atendidas:</span><span id="total-atendidas" class="font-semibold">0</span></div>
+            <div class="flex justify-between"><span>Aguardando:</span><span id="total-aguardando" class="font-semibold">0</span></div>
+          </div>
+          <!-- Estatística por bairros (hoje) -->
+          <div class="mt-5">
+            <h4 class="text-sm font-semibold mb-2">Por bairro (hoje)</h4>
+            <div id="stats-bairros-dia" class="space-y-1 text-sm">
+              <!-- preenchido via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista aguardando -->
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-semibold">Senhas Aguardando</h3>
+          <button id="btn-atualizar-lista" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Atualizar</button>
+        </div>
+        <div class="bg-white border rounded-lg overflow-hidden">
+          <div id="lista-aguardando" class="divide-y"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== GUICHÊ ========== -->
+  <section id="tela-guiche" class="max-w-6xl mx-auto p-6 hidden">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h2 class="text-2xl font-bold text-center mb-6">Painel do Guichê</h2>
+
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Controles</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Número do Guichê</label>
+              <select id="numero-guiche" class="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500"></select>
+            </div>
+
+            <!-- NOVO: Local de Atendimento / Setor selecionado -->
+            <div>
+              <label class="block text-sm font-medium mb-1">Local de Atendimento</label>
+              <select id="setor-guiche" class="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500">
+                <option value="Guichês">Guichês</option>
+                <option value="Sala do Serviço Social">Sala do Serviço Social</option>
+                <option value="Sala da Coordenadora">Sala da Coordenadora</option>
+              </select>
+            </div>
+
+            <!-- Trava de Guichê por ABA -->
+            <div id="lock-guiche-box" class="p-3 rounded-lg border bg-white">
+              <label class="flex items-start gap-2">
+                <input id="lock-guiche" type="checkbox" class="mt-1 rounded">
+                <div>
+                  <div class="font-medium">Travar guichê nesta ABA</div>
+                  <div class="text-xs text-slate-500">Fixa o número do guichê apenas nesta aba. Outras abas não são afetadas.</div>
+                </div>
+              </label>
+            </div>
+
+            <!-- Estado da chamada -->
+            <div id="guiche-state" class="p-3 rounded-lg border bg-slate-100">
+              <div class="text-xs text-slate-500">Estado da chamada</div>
+              <div id="guiche-state-msg" class="mt-1 font-medium">—</div>
+            </div>
+
+            <button id="btn-chamar-proximo" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold text-lg">🔊 CHAMAR PRÓXIMO</button>
+            <button id="btn-chamar-novamente" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 rounded-lg" disabled>🔁 Chamar Novamente</button>
+            <button id="btn-iniciar-atendimento" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg" disabled>▶️ Iniciar Atendimento</button>
+            <button id="btn-nao-compareceu" class="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 rounded-lg" disabled>❌ Não Compareceu</button>
+            <button id="btn-finalizar-atendimento" class="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold text-lg" disabled>✅ FINALIZAR ATENDIMENTO</button>
+
+            <!-- Chamada Manual com callSenhaManual -->
+            <div class="mt-4 pt-4 border-t border-slate-200">
+              <h4 class="text-sm font-semibold mb-2">Chamada Manual</h4>
+              <div class="space-y-2">
+                <div>
+                  <label class="block text-xs font-medium mb-1">Código da Senha (ex.: N001)</label>
+                  <input id="manual-codigo" type="text" class="w-full p-2 rounded border border-slate-300 text-sm" placeholder="N001">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium mb-1">Nome (opcional)</label>
+                  <input id="manual-nome" type="text" class="w-full p-2 rounded border border-slate-300 text-sm" placeholder="Nome para registro">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium mb-1">Serviço (opcional)</label>
+                  <input id="manual-servico" type="text" class="w-full p-2 rounded border border-slate-300 text-sm" placeholder="Ex.: Atendimento espontâneo">
+                </div>
+                <button id="btn-chamar-manual" type="button" class="w-full bg-slate-700 hover:bg-slate-800 text-white py-2 rounded-lg text-sm">
+                  🔢 Chamar senha manual
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Atendimento Atual</h3>
+          <div id="senha-atual" class="text-center">
+            <div id="senha-atual-numero" class="text-4xl font-black text-blue-600">-</div>
+            <div id="senha-atual-nome" class="text-lg font-medium">-</div>
+            <div id="senha-atual-tipo" class="text-sm text-slate-600">Nenhuma senha em atendimento</div>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Próximas na Fila</h3>
+          <div id="proximas-senhas-guiche" class="space-y-2 max-h-64 overflow-y-auto">
+            <div class="text-center text-slate-500 text-sm">Nenhuma senha na fila</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-8">
+        <h3 class="text-lg font-semibold mb-3">Histórico de Atendimentos — Guichê <span id="guiche-historico-numero">1</span></h3>
+        <div class="bg-white border rounded-lg overflow-hidden">
+          <div class="max-h-64 overflow-y-auto">
+            <div id="historico-guiche" class="divide-y">
+              <div class="p-4 text-center text-slate-500">Nenhum atendimento realizado</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========== TELA TV ========== -->
+  <section id="tela-tv" class="min-h-full bg-white hidden">
+    <!-- Overlay para destravar o áudio -->
+    <div id="audio-unlock">
+      <div class="inner">
+        <h3 class="text-xl font-bold mb-2">Ativar som da Tela TV</h3>
+        <p class="text-sm text-slate-200 mb-4">Clique no botão abaixo para permitir que a TV fale as chamadas.</p>
+        <button id="btn-unlock-audio">Ativar som</button>
+      </div>
+    </div>
+
+    <div id="chamada-fullscreen" class="min-h-full flex items-center justify-center p-6 hidden">
+      <div class="w-full max-w-6xl text-center">
+        <div id="senha-fullscreen" class="text-[10rem] sm:text-[12rem] font-black text-blue-800 mb-10">A001</div>
+        <div id="nome-fullscreen"  class="text-6xl sm:text-7xl font-bold text-slate-900 mb-10">JOÃO DA SILVA</div>
+        <div class="text-6xl sm:text-7xl font-black text-blue-600">GUICHÊ <span id="guiche-fullscreen">1</span></div>
+      </div>
+    </div>
+
+    <div id="tela-normal" class="p-6">
+      <div class="text-center mb-8 bg-slate-100 rounded-2xl p-6 border">
+        <h1 id="nome-orgao" class="text-3xl font-bold">Prefeitura Municipal</h1>
+        <h2 class="text-xl text-slate-600">Sistema de Senhas — CadÚnico</h2>
+        <div id="data-hora" class="text-lg mt-2 text-slate-500"></div>
+      </div>
+      <div id="grid-chamadas" class="grid grid-cols-4 gap-4"></div>
+      <div id="sem-chamadas" class="text-center py-16">
+        <div class="text-2xl font-bold text-slate-600 mb-2">Aguardando primeira chamada</div>
+        <div class="text-base text-slate-400">As senhas chamadas aparecerão aqui</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== ADMIN ========== -->
+  <section id="tela-admin" class="max-w-7xl mx-auto p-6 hidden">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">Painel Administrativo</h2>
+        <div class="flex gap-2">
+          <button id="btn-go-estat" class="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-lg">Estatísticas</button>
+
+          <!-- Botões oficiais dentro do Admin -->
+          <button id="btn-salvar-config-admin" class="bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-3 rounded-lg">
+            Salvar configurações
+          </button>
+          <input type="file" id="file-import-config-admin" accept="application/json" class="hidden">
+          <button id="btn-importar-config-admin" class="bg-slate-700 hover:bg-slate-800 text-white py-2 px-3 rounded-lg">
+            Importar
+          </button>
+          <button id="btn-exportar-config-admin" class="bg-slate-800 hover:bg-slate-900 text-white py-2 px-3 rounded-lg">
+            Exportar
+          </button>
+
+          <button id="btn-admin-logout" class="bg-slate-700 hover:bg-slate-800 text-white py-2 px-3 rounded-lg">Sair</button>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-4 gap-6">
+        <!-- Áudio -->
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Configurações de Áudio</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm mb-1">Volume do Áudio</label>
+              <input id="volume-audio" type="range" min="0" max="1" step="0.1" value="0.7" class="w-full">
+              <div class="text-sm text-slate-600">Volume: <span id="volume-display">70%</span></div>
+            </div>
+            <div>
+              <label class="block text-sm mb-1">Velocidade da Fala</label>
+              <input id="velocidade-fala" type="range" min="0.5" max="2" step="0.1" value="1" class="w-full">
+              <div class="text-sm text-slate-600">Velocidade: <span id="velocidade-display">1x</span></div>
+            </div>
+            <div>
+              <label class="block text-sm mb-1">Repetições do Anúncio</label>
+              <select id="repeticoes-anuncio" class="w-full p-2 rounded border">
+                <option value="2">2 vezes</option>
+                <option value="3">3 vezes</option>
+                <option value="4" selected>4 vezes</option>
+                <option value="5">5 vezes</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btn-salvar-audio" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg">Salvar áudio</button>
+              <button id="btn-testar-audio" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg">Testar Áudio</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Guichês -->
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Configurações de Guichês</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm mb-1">Número de Guichês</label>
+              <select id="numero-guiches" class="w-full p-2 rounded border">
+                <option>3</option><option>4</option><option>5</option>
+                <option selected>6</option><option>8</option><option>10</option>
+                <option>12</option><option>14</option><option>16</option><option>20</option>
+                <option value="custom">Personalizado…</option>
+              </select>
+              <div id="wrap-guiches-custom" class="mt-2 hidden">
+                <label class="block text-sm mb-1">Quantidade personalizada</label>
+                <input id="numero-guiches-custom" type="number" min="1" max="50" value="6" class="w-full p-2 rounded border">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm mb-1">Tempo de Chamada (segundos)</label>
+              <input id="tempo-chamada" type="number" min="8" max="60" value="15" class="w-full p-2 rounded border">
+            </div>
+            <button id="btn-aplicar-guiches" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg">Aplicar Configurações</button>
+          </div>
+        </div>
+
+        <!-- Serviços -->
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Gerenciar Serviços</h3>
+          <div class="space-y-3">
+            <div class="flex gap-2">
+              <input id="novo-servico" type="text" class="w-full p-2 rounded border" placeholder="Nome do serviço">
+              <button id="btn-adicionar-servico" class="bg-purple-600 hover:bg-purple-700 text-white px-4 rounded-lg">Adicionar</button>
+            </div>
+            <div class="text-xs text-slate-500">Lista inicial populada com benefícios/programas que usam o CadÚnico. Edite à vontade.</div>
+            <div id="lista-servicos-admin" class="max-h-44 overflow-y-auto space-y-1"></div>
+          </div>
+        </div>
+
+        <!-- Impressão -->
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Configuração de Impressão</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm mb-1">Preset rápido</label>
+              <select id="preset-largura" class="w-full p-2 rounded border">
+                <option value="48">58 mm (largura útil ~48–50 mm)</option>
+                <option value="72" selected>80 mm (largura útil ~72 mm)</option>
+                <option value="50">50 mm (custom)</option>
+                <option value="60">60 mm (custom)</option>
+                <option value="70">70 mm (custom)</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm mb-1">Largura (mm)</label>
+                <input id="print-width" type="number" step="0.5" min="40" max="80" class="w-full p-2 rounded border" value="72">
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Fonte base (px)</label>
+                <input id="print-font" type="number" min="8" max="18" class="w-full p-2 rounded border" value="12">
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Margem Top (mm)</label>
+                <input id="print-mt" type="number" step="0.5" min="0" max="10" class="w-full p-2 rounded border" value="2">
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Margem Bottom (mm)</label>
+                <input id="print-mb" type="number" step="0.5" min="0" max="10" class="w-full p-2 rounded border" value="3">
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Espaçamento (px)</label>
+                <input id="print-gap" type="number" min="0" max="8" class="w-full p-2 rounded border" value="1">
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Nome do Órgão</label>
+                <input id="print-orgao" type="text" class="w-full p-2 rounded border" value="Prefeitura Municipal">
+              </div>
+            </div>
+            <div class="text-xs text-slate-500">No print do navegador: <b>Margens: Nenhuma</b> e <b>Escala: 100%</b>.</div>
+            <button id="btn-imprimir-teste" class="w-full bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-lg">Imprimir teste</button>
+          </div>
+        </div>
+
+        <!-- Bairros & PIN da Tela TV -->
+        <div class="bg-slate-50 p-5 rounded-lg lg:col-span-2">
+          <h3 class="text-lg font-semibold mb-3">Bairros & PIN da Tela TV</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm mb-1">Adicionar bairro</label>
+              <div class="flex gap-2">
+                <input id="novo-bairro" type="text" class="w-full p-2 rounded border" placeholder="Nome do bairro">
+                <button id="btn-adicionar-bairro" class="bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-lg text-sm">Adicionar</button>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">Esta lista será usada no campo de bairro da Recepção.</p>
+            </div>
+            <div>
+              <label class="block text-sm mb-1">Bairros cadastrados</label>
+              <div id="lista-bairros-admin" class="max-h-32 overflow-y-auto space-y-1 bg-white border rounded p-2 text-sm">
+                <!-- preenchido via JS -->
+              </div>
+            </div>
+            <div class="pt-4 border-t border-slate-200">
+              <label class="block text-sm mb-1">PIN da Tela TV</label>
+              <input id="tv-pin" type="password" class="w-full p-2 rounded border" placeholder="Defina um PIN (opcional)">
+              <p class="text-xs text-slate-500 mt-1">Se definido, será solicitado para abrir a Tela TV neste dispositivo.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ORDEM DE CHAMADA -->
+      <div class="mt-8 grid lg:grid-cols-3 gap-6">
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Ordem de Chamada</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm mb-1">Preset</label>
+              <select id="ordem-preset" class="w-full p-2 rounded border">
+                <option value="P,N,G">P, N, G</option>
+                <option value="N,P,G">N, P, G</option>
+                <option value="P,G,N">P, G, N</option>
+                <option value="N,G,P">N, G, P</option>
+                <option value="G,P,N">G, P, N</option>
+                <option value="G,N,P">G, N, P</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm mb-1">Personalizado (use N,P,G)</label>
+              <input id="ordem-custom" type="text" class="w-full p-2 rounded border" placeholder="Ex.: P,N,G">
+              <div class="text-[11px] text-slate-500 mt-1">N = Normal, P = Preferencial, G = Agendamento</div>
+            </div>
+            <button id="btn-aplicar-ordem" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg">Aplicar Ordem</button>
+            <div class="text-sm text-slate-600">Ordem atual: <b id="ordem-atual">—</b></div>
+          </div>
+        </div>
+
+        <!-- Estatísticas rápidas (Admin) -->
+        <div class="bg-slate-50 p-5 rounded-lg lg:col-span-2">
+          <h3 class="text-lg font-semibold mb-3">Estatísticas Gerais (hoje)</h3>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <div class="flex justify-between"><span>Total de Senhas Hoje:</span><span id="admin-total-senhas" class="font-semibold">0</span></div>
+              <div class="flex justify-between"><span>Atendimentos Concluídos:</span><span id="admin-total-atendidas" class="font-semibold">0</span></div>
+              <div class="flex justify-between"><span>Aguardando Atendimento:</span><span id="admin-total-aguardando" class="font-semibold">0</span></div>
+              <div class="flex justify-between"><span>Em Atendimento:</span><span id="admin-total-chamando" class="font-semibold">0</span></div>
+              <div class="mt-3">
+                <h4 class="font-medium mb-1">Atendimentos por Guichê</h4>
+                <div id="stats-por-guiche" class="space-y-1"></div>
+              </div>
+              <div class="mt-3">
+                <h4 class="font-medium mb-1">Top Bairros (hoje)</h4>
+                <div id="stats-por-bairro-admin" class="space-y-1"></div>
+              </div>
+              <div class="mt-4 grid grid-cols-3 gap-2">
+                <!-- onClick de fallback para garantir clique -->
+                <button id="btn-limpar-historico" class="bg-yellow-600 hover:bg-yellow-700 text-white py-2 rounded-lg"
+                        onclick="window._adminLimpar()">Limpar Histórico</button>
+                <button id="btn-resetar-contadores" class="bg-orange-600 hover:bg-orange-700 text-white py-2 rounded-lg"
+                        onclick="window._adminReset()">Resetar Contadores</button>
+                <button id="btn-exportar-dados" class="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg"
+                        onclick="window._adminExportar()">Exportar Dados</button>
+              </div>
+            </div>
+
+            <!-- Monitor ao vivo -->
+            <div class="bg-white border rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-medium">Monitoramento ao Vivo</h4>
+                <div class="flex gap-2">
+                  <label class="text-sm flex items-center gap-2"><input id="monitor-auto" type="checkbox" class="rounded">Auto</label>
+                  <button id="btn-monitor-refresh" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm">Atualizar</button>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="text-slate-500">
+                    <tr>
+                      <th class="text-left p-2">Guichê</th>
+                      <th class="text-left p-2">Status</th>
+                      <th class="text-left p-2">Senha</th>
+                      <th class="text-left p-2">Nome</th>
+                      <th class="text-left p-2">Desde</th>
+                      <th class="text-left p-2">Chamadas</th>
+                    </tr>
+                  </thead>
+                  <tbody id="monitor-body" class="divide-y">
+                    <tr><td colspan="6" class="p-3 text-center text-slate-500">Aguardando dados…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Busca CPF/Nome + Histórico completo -->
+      <div class="mt-8 grid lg:grid-cols-2 gap-6">
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Busca por CPF ou Nome</h3>
+          <div class="flex gap-2 mb-3">
+            <input id="busca-cpf" type="text" maxlength="60" class="w-full p-2 rounded border" placeholder="Digite CPF (000.000.000-00) ou Nome completo">
+            <!-- onClick de fallback -->
+            <button id="btn-buscar-cpf" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-lg"
+                    onclick="window._buscarCpf()">Buscar</button>
+            <button id="btn-exportar-cpf" class="bg-slate-700 hover:bg-slate-800 text-white px-4 rounded-lg" disabled
+                    onclick="window._exportarCpf()">Exportar</button>
+          </div>
+
+          <!-- Resumo da pessoa -->
+          <div id="resumo-pessoa" class="hidden mb-3 p-3 bg-white border rounded-lg">
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="resumo-nome" class="chip chip-blue">Nome: —</span>
+              <span id="resumo-cpf" class="chip chip-gray">CPF: —</span>
+              <span id="resumo-total" class="chip chip-green">Registros: 0</span>
+              <span id="resumo-status" class="chip chip-yellow">Último status: —</span>
+            </div>
+          </div>
+
+          <div id="resultado-cpf" class="max-h-80 overflow-y-auto bg-white border rounded divide-y">
+            <div class="p-4 text-center text-slate-500">Informe CPF ou Nome e clique em buscar.</div>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Histórico Completo (Atendidas)</h3>
+          <div class="max-h-96 overflow-y-auto bg-white border rounded">
+            <div id="historico-completo" class="divide-y">
+              <div class="p-4 text-center text-slate-500">Nenhum atendimento realizado</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========== ESTATÍSTICAS (PERÍODO) ========== -->
+  <section id="tela-estatisticas" class="max-w-7xl mx-auto p-6 hidden">
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">Estatísticas — Período</h2>
+        <button id="btn-voltar-admin" class="bg-slate-700 hover:bg-slate-800 text-white py-2 px-3 rounded-lg">Voltar ao Admin</button>
+      </div>
+
+      <div class="bg-slate-50 p-4 rounded-lg mb-6">
+        <div class="flex flex-wrap gap-2 items-end">
+          <div class="space-y-1">
+            <label class="text-sm">Período rápido</label>
+            <select id="periodo-rapido" class="p-2 rounded border">
+              <option value="hoje">Hoje</option>
+              <option value="7d">Últimos 7 dias</option>
+              <option value="30d">Últimos 30 dias</option>
+              <option value="mes">Mês atual</option>
+              <option value="personalizado">Personalizado</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="text-sm">De</label>
+            <input type="date" id="de" class="p-2 rounded border">
+          </div>
+          <div class="space-y-1">
+            <label class="text-sm">Até</label>
+            <input type="date" id="ate" class="p-2 rounded border">
+          </div>
+          <button id="btn-aplicar-periodo" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">Aplicar</button>
+        </div>
+      </div>
+
+      <div id="kpis" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+
+      <div class="grid lg:grid-cols-2 gap-6">
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Atendimentos por Guichê</h3>
+          <div id="stat-guiche" class="space-y-2"></div>
+        </div>
+        <div class="bg-slate-50 p-5 rounded-lg">
+          <h3 class="text-lg font-semibold mb-3">Atendimentos por Tipo</h3>
+          <div id="stat-tipo" class="space-y-2"></div>
+        </div>
+        <div class="bg-slate-50 p-5 rounded-lg lg:col-span-2">
+          <h3 class="text-lg font-semibold mb-3">Top Serviços</h3>
+          <div id="stat-servico" class="space-y-2"></div>
+        </div>
+        <!-- NOVO: Estatística por Bairro no período -->
+        <div class="bg-slate-50 p-5 rounded-lg lg:col-span-2">
+          <h3 class="text-lg font-semibold mb-3">Atendimentos por Bairro</h3>
+          <div id="stat-bairro" class="space-y-2"></div>
+        </div>
+        <div class="bg-slate-50 p-5 rounded-lg lg:col-span-2">
+          <h3 class="text-lg font-semibold mb-3">Fluxo por Hora do Dia</h3>
+          <div id="stat-hora" class="space-y-2"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- MODAL LOGIN ADMIN -->
+<div id="admin-modal" class="modal-backdrop" style="display:none" aria-hidden="true">
+  <div class="card p-6 w-full max-w-md">
+    <h3 class="text-xl font-bold mb-1">Acesso ao Admin</h3>
+    <p class="text-slate-600 mb-4 text-sm">Informe usuário e senha para entrar.</p>
+    <div class="space-y-3">
+      <div>
+        <label class="text-sm">Usuário</label>
+        <input id="admin-user" type="text" class="w-full p-2 rounded border" placeholder="ex.: admin">
+      </div>
+      <div>
+        <label class="text-sm">Senha</label>
+        <input id="admin-pass" type="password" class="w-full p-2 rounded border" placeholder="••••••">
+      </div>
+      <div class="flex gap-2">
+        <button id="btn-admin-login" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg">Entrar</button>
+        <button id="btn-admin-cancel" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg">Cancelar</button>
+      </div>
+      <div id="admin-login-msg" class="text-sm text-red-600"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PIN DA TELA TV -->
+<div id="tv-pin-modal" class="modal-backdrop" style="display:none" aria-hidden="true">
+  <div class="card p-6 w-full max-w-sm">
+    <h3 class="text-xl font-bold mb-1">PIN da Tela TV</h3>
+    <p class="text-slate-600 mb-4 text-sm">Digite o PIN configurado para abrir a Tela TV neste dispositivo.</p>
+    <div class="space-y-3">
+      <input id="tv-pin-input" type="password" class="w-full p-2 rounded border" placeholder="PIN">
+      <div class="flex gap-2">
+        <button id="btn-tv-pin-ok" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg">Entrar</button>
+        <button id="btn-tv-pin-cancel" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg">Cancelar</button>
+      </div>
+      <div id="tv-pin-msg" class="text-sm text-red-600"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE -->
+<div id="detalhe-modal" class="modal-backdrop" style="display:none" aria-hidden="true">
+  <div class="card p-6 w-full max-w-2xl">
+    <div class="flex items-start justify-between mb-3">
+      <h3 class="text-xl font-bold">Detalhes do Atendimento</h3>
+      <button id="btn-fechar-detalhe" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded">Fechar</button>
+    </div>
+    <div id="detalhe-conteudo" class="text-sm">
+      <!-- preenchido via JS -->
+    </div>
+  </div>
+</div>
+
+<!-- Ponte Apps Script (robusta) + SDK -->
+<script>
+(function(){
+  window.addEventListener('error',   e => console.error('JS Error:', e?.error || e?.message));
+  window.addEventListener('unhandledrejection', e => console.error('Promise Error:', e?.reason));
+
+  async function callSafe(fn, ...args){
+    return new Promise((resolve) => {
+      try{
+        if(!google?.script?.run){
+          resolve({ ok:false, error:'API indisponível (google.script.run)' });
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(v => resolve({ ok:true,  value:v }))
+          .withFailureHandler(err => {
+            const msg = String((err && err.message) || err || 'Erro desconhecido');
+            resolve({ ok:false, error: msg });
+          })[fn](...args);
+      }catch(e){
+        resolve({ ok:false, error: String(e) });
+      }
+    });
+  }
+
+  let poll = null;
+  let refreshInFlight = false;
+  let lastDataSignature = '';
+
+  function dataSignature(rows){
+    if(!Array.isArray(rows)) return '';
+    return rows.map(r => [
+      r.id || '',
+      r.status || '',
+      r.chamadoEm || '',
+      r.iniciadoEm || '',
+      r.finalizadoEm || '',
+      String(r.calls || 0)
+    ].join('|')).join('||');
+  }
+
+  // SDK: todas chamadas ao Apps Script reunidas aqui
+  window.dataSdk = {
+    h: null,
+    async init(handler){
+      this.h = handler || null;
+
+      await Promise.allSettled([
+        (async ()=>{
+          try{
+            const cfg = await this.loadConfig();
+            if(cfg?.ok && cfg.config){
+              await window.applyImportedConfig(cfg.config, /*skipSave*/ true);
+            }
+          }catch(_){ }
+        })(),
+        this.refresh({ forceNotify:true })
+      ]);
+
+      if (poll) clearTimeout(poll);
+      const tick = async ()=>{
+        try{ await this.refresh(); }catch(_){ }
+        poll = setTimeout(tick, 2500);
+      };
+      poll = setTimeout(tick, 2500);
+      return { isOk:true };
+    },
+    async refresh(opts = {}){
+      if(refreshInFlight){
+        return { isOk:true, skipped:true };
+      }
+      refreshInFlight = true;
+      const r = await callSafe('getAllSenhas');
+      try{
+        if (r && r.ok && Array.isArray(r.value) && this.h?.onDataChanged){
+          const sig = dataSignature(r.value);
+          if (opts.forceNotify || sig !== lastDataSignature){
+            lastDataSignature = sig;
+            this.h.onDataChanged(r.value);
+          }
+        }
+        return { isOk: !!(r && r.ok) };
+      } finally {
+        refreshInFlight = false;
+      }
+    },
+
+    // CRUD
+    async create(o){ const r = await callSafe('createSenha', o);
+      await this.refresh().catch(()=>{});
+      const ok = !!(r && r.ok && r.value && r.value.ok);
+      return { isOk: ok, data:r?.value?.data||null, msg:r?.value?.msg||r?.error||'Erro', reused:!!r?.value?.reused };
+    },
+    async update(o){ const r = await callSafe('updateSenha', o);
+      await this.refresh().catch(()=>{});
+      return { isOk: !!r?.ok && !!r?.value?.ok, data:r?.value?.data||null, msg:r?.value?.msg||r?.error||'Erro' };
+    },
+    async delete(id){ const r = await callSafe('deleteSenha', id.id || id);
+      await this.refresh().catch(()=>{});
+      return { isOk: !!r?.ok && !!r?.value?.ok, msg:r?.value?.msg||r?.error||'Erro' };
+    },
+
+    // Fluxo
+    async callNext(g,setor){ const r = await callSafe('callNext', g, setor); return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+    async start(id){          const r = await callSafe('iniciarAtendimento', id);    return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+    async finish(id){         const r = await callSafe('finalizarAtendimento', id);  return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+    async noShow(id){         const r = await callSafe('marcarNoShow', id);          return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+    async repeat(id){         const r = await callSafe('repetirChamada', id);        return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+    // chamada manual
+    async callManual(payload){const r = await callSafe('callSenhaManual', payload);  return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+
+    // Ordem
+    async getOrder(){         const r = await callSafe('getCallOrder');              return r?.value || { ok:false, order:'P,N,G' }; },
+    async setOrder(seq){      const r = await callSafe('setCallOrder', seq);         return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+
+    // Consultas
+    async getPeriodo(de,ate){ const r = await callSafe('getSenhasPeriodo', de||'', ate||''); return Array.isArray(r?.value) ? r.value : []; },
+    async searchCPF(c,de,ate){const r = await callSafe('searchCPF', c||'', de||'', ate||'');  return Array.isArray(r?.value) ? r.value : []; },
+    async searchNome(n,de,ate){const r = await callSafe('searchNome', n||'', de||'', ate||'');return Array.isArray(r?.value) ? r.value : []; },
+
+    // Admin
+    async clearToday(){       const r = await callSafe('clearToday');                return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+    async resetCounters(){    const r = await callSafe('resetCounters');             return r?.value || { ok:false, msg:r?.error||'Erro' }; },
+    async validateAdmin(u,p){ const r = await callSafe('validateAdmin', u, p);       return r?.value || { ok:false }; },
+
+    // Config persistida
+    async saveConfig(config){
+      const r = await callSafe('saveConfig', config);
+      return r?.value || { ok:false, msg:r?.error||'Falha ao salvar no servidor' };
+    },
+    async loadConfig(){
+      const r = await callSafe('loadConfig');
+      return r?.value || { ok:false };
+    }
+  };
+})();
+</script>
+
+<!-- APP (lógica principal) -->
+<script>
+"use strict";
+
+/* Config geral */
+const defaultConfig = {
+  titulo_sistema: "Sistema de Chamados CadÚnico",
+  nome_orgao: "Prefeitura Municipal",
+  mensagem_aguarde: "Aguarde ser chamado no painel"
+};
+/* Setor fixo deste sistema (mandado no createSenha) */
+const SETOR_PADRAO = 'CADUNICO'; // ajuste se precisar
+
+/* Bairros & PIN da TV (config) */
+const BAIRROS_KEY = 'cadunico_bairros';
+const TVPIN_KEY   = 'cadunico_tv_pin';
+let bairrosConfig = [];
+let tvPinConfig   = '';
+let tvPinUnlocked = false;
+
+function loadBairrosLocal(){
+  try{
+    const v = JSON.parse(localStorage.getItem(BAIRROS_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  }catch(_){
+    return [];
+  }
+}
+function saveBairrosLocal(list){
+  bairrosConfig = Array.from(new Set((list || []).map(x => String(x).trim()).filter(Boolean)));
+  localStorage.setItem(BAIRROS_KEY, JSON.stringify(bairrosConfig));
+  preencherSelectBairros();
+  desenharBairrosAdmin();
+}
+function initBairros(){
+  bairrosConfig = loadBairrosLocal();
+}
+function setTvPinLocal(pin){
+  tvPinConfig = String(pin || '').trim();
+  localStorage.setItem(TVPIN_KEY, tvPinConfig);
+  const input = byId('tv-pin');
+  if(input) input.value = tvPinConfig;
+  tvPinUnlocked = false;
+}
+function initTvPin(){
+  tvPinConfig = String(localStorage.getItem(TVPIN_KEY) || '').trim();
+}
+
+/* Prefixos por tipo (exibição + fala + impressão) */
+const PREFIX_BY_TYPE = { normal: 'N', prioritario: 'P', agendamento: 'G' };
+const TIPO_TXT = { normal:'Atendimento Normal', prioritario:'Atendimento Preferencial', agendamento:'Agendamento' };
+function prefixoPorTipo(t){ return PREFIX_BY_TYPE[t] || 'A'; }
+function codigoDisplay(s){
+  const t = (s?.tipo)||'normal';
+  const pref = prefixoPorTipo(t);
+  const raw = String(s?.numero||'').trim();
+  const m = raw.match(/[A-Z]?(\d+)/i);
+  const num = (m && m[1]) ? m[1].padStart(3,'0') : (raw || '000').replace(/\D/g,'').padStart(3,'0');
+  return `${pref}${num}`;
+}
+
+/* Fala (TTS) */
+const DIG_WORD = {0:'zero',1:'um',2:'dois',3:'três',4:'quatro',5:'cinco',6:'seis',7:'sete',8:'oito',9:'nove'};
+function numeroPorExtenso3(numStr){
+  const n = (numStr||'000').replace(/\D/g,'').padStart(3,'0').slice(-3).split('');
+  return `${DIG_WORD[n[0]]} ${DIG_WORD[n[1]]} ${DIG_WORD[n[2]]}`;
+}
+function codigoParaFala(s){
+  const c = codigoDisplay(s);
+  const letra = c[0];
+  const digitos = c.slice(1);
+  return `letra ${letra} ${numeroPorExtenso3(digitos)}`;
+}
+let audioUnlocked=false;
+
+// Persistência de áudio
+const AUDIO_KEY = 'cadunico_audio_cfg';
+function getAudioCfg(){
+  try { return JSON.parse(localStorage.getItem(AUDIO_KEY)) || { volume:0.7, velocidade:1, repeticoes:4 }; }
+  catch{ return { volume:0.7, velocidade:1, repeticoes:4 }; }
+}
+function setAudioCfg(cfg){
+  localStorage.setItem(AUDIO_KEY, JSON.stringify(cfg||{}));
+  configAudio = Object.assign({}, cfg||{});
+  safeSet('volume-audio', configAudio.volume);
+  safeSet('velocidade-fala', configAudio.velocidade);
+  safeSet('repeticoes-anuncio', String(configAudio.repeticoes||4));
+  safeText('volume-display', Math.round((configAudio.volume||0)*100)+'%');
+  safeText('velocidade-display', (configAudio.velocidade||1)+'x');
+}
+let configAudio = getAudioCfg();
+
+function canSpeak(){ return (telaAtiva === 'tv') && ('speechSynthesis' in window) && audioUnlocked; }
+function speakText(text, repeat=(configAudio.repeticoes||3)){
+  return new Promise(resolve=>{
+    if(!canSpeak() || repeat<=0){ resolve(); return; }
+    let i=0;
+    const say=()=>{ if(i>=repeat){ resolve(); return; }
+      const u=new SpeechSynthesisUtterance(text);
+      u.lang='pt-BR'; u.volume=configAudio.volume; u.rate=configAudio.velocidade;
+      u.onend=()=>{ i++; setTimeout(say,250); };
+      speechSynthesis.speak(u);
+    }; say();
+  });
+}
+function speakAnnouncement(s){
+  const frase = `Atenção! Senha ${codigoParaFala(s)}, ${s.nome}, dirija-se ao guichê número ${s.guiche}.`;
+  return speakText(frase, configAudio.repeticoes||3);
+}
+
+/* Estado global */
+let senhas = [];
+let senhaAtual = null;
+let telaAtiva = 'recepcao';
+let servicoSelecionado = '';
+let lastGenerated = null;
+
+const LOCAL_SENHAS_SNAPSHOT_KEY = 'cadunico_last_senhas_snapshot';
+function saveSenhasSnapshot(rows){
+  try{
+    localStorage.setItem(LOCAL_SENHAS_SNAPSHOT_KEY, JSON.stringify({
+      ts: Date.now(),
+      rows: Array.isArray(rows) ? rows : []
+    }));
+  }catch(_){ }
+}
+function loadSenhasSnapshot(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(LOCAL_SENHAS_SNAPSHOT_KEY) || 'null');
+    if(!raw || !Array.isArray(raw.rows)) return [];
+    return raw.rows;
+  }catch(_){
+    return [];
+  }
+}
+
+/* Admin (sempre pedir senha) */
+let afterLogin = null;
+function getAdminToken(){ return ''; }
+
+const ADMIN_KEY  = 'cadunico_admin_token';
+const ADMIN_USER = 'cadunico_admin_user';
+
+const PRINT_KEY   = 'cadunico_print_cfg';
+const ORDER_KEY   = 'cadunico_order_seq';
+const GUICHES_KEY = 'cadunico_qt_guiches';
+
+/* Preferências/locks do Guichê */
+const GUICHE_PREF_KEY = 'cadunico_guiche_pref';
+const LOCK_FLAG_KEY   = 'cadunico_lock_enabled';
+const LOCK_NUM_KEY    = 'cadunico_lock_num';
+function isGuicheLocked(){ return sessionStorage.getItem(LOCK_FLAG_KEY) === '1'; }
+function getLockedGuiche(){
+  if(!isGuicheLocked()) return null;
+  const n = parseInt(sessionStorage.getItem(LOCK_NUM_KEY) || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function applyGuicheLockUI(){
+  const chk = byId('lock-guiche');
+  const sel = byId('numero-guiche');
+  if(!chk || !sel) return;
+  const locked = isGuicheLocked();
+  const ln = getLockedGuiche();
+  chk.checked = !!locked;
+  if(locked && ln){
+    const exists = Array.from(sel.options).some(o => String(o.value) === String(ln));
+    if(exists) sel.value = String(ln);
+    sel.disabled = true;
+  }else{
+    sel.disabled = false;
+  }
+  safeText('guiche-historico-numero', sel.value || '1');
+}
+
+/* Apresentação na TV */
+const callQueue = [];
+const queuedIds = new Set();
+let presenting = false;
+let displayTimer = null;
+function tvKey(s){ return (s?.id||'') + '|' + (s?.chamadoEm||''); }
+function enqueuePresentation(s){
+  const key = tvKey(s);
+  if(queuedIds.has(key)) return;
+  queuedIds.add(key);
+  callQueue.push(s);
+  if(!presenting) presentNext();
+}
+async function presentNext(){
+  if(!callQueue.length){ presenting=false; return; }
+  presenting=true;
+
+  const s = callQueue.shift();
+  queuedIds.delete(tvKey(s));
+
+  byId('senha-fullscreen').textContent = codigoDisplay(s);
+  byId('nome-fullscreen').textContent  = (s.nome||'').toUpperCase();
+  byId('guiche-fullscreen').textContent= s.guiche||'';
+  byId('tela-normal').classList.add('hidden');
+  byId('chamada-fullscreen').classList.remove('hidden');
+
+  const durMs = (getPrintCfg().tempoChamada||15)*1000;
+  const fimTela = new Promise(res=>{ displayTimer=setTimeout(res, durMs); });
+  const fimAudio = (async ()=>{ await speakAnnouncement(s); })();
+  await Promise.all([fimTela, fimAudio]);
+
+  byId('chamada-fullscreen').classList.add('hidden');
+  byId('tela-normal').classList.remove('hidden');
+  atualizarGridChamadas();
+
+  presenting=false; displayTimer=null;
+  setTimeout(presentNext, 30);
+}
+
+/* Impressão */
+function getPrintCfg(){
+  const saved = JSON.parse(localStorage.getItem(PRINT_KEY) || 'null') || {};
+  return Object.assign({
+    widthMm: 72, marginTopMm: 2, marginBottomMm: 3, fontPx: 12, gapPx: 1,
+    orgao: defaultConfig.nome_orgao,
+    tempoChamada: parseInt(byId('tempo-chamada')?.value || '15',10) || 15
+  }, saved);
+}
+function setPrintCfg(upd){
+  const cur  = getPrintCfg();
+  const novo = Object.assign({}, cur, upd||{});
+  localStorage.setItem(PRINT_KEY, JSON.stringify(novo));
+
+  safeSet('print-width', novo.widthMm);
+  safeSet('print-font',  novo.fontPx);
+  safeSet('print-mt',    novo.marginTopMm);
+  safeSet('print-mb',    novo.marginBottomMm);
+  safeSet('print-gap',   novo.gapPx);
+  safeSet('print-orgao', novo.orgao);
+  safeSet('tempo-chamada', novo.tempoChamada || 15);
+}
+
+function gerarHtmlTicket(s, isTeste=false){
+  const cfg = getPrintCfg();
+  const f = (x)=>Math.round(cfg.fontPx*(x||1));
+  const hora = new Date(s.timestamp || Date.now()).toLocaleString('pt-BR');
+  const cod = codigoDisplay(s);
+  return `
+  <!doctype html><html><head><meta charset="utf-8">
+    <style>
+      @page { size: ${cfg.widthMm}mm auto; margin: 0; }
+      html, body { margin:0; padding:0; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: Arial, Helvetica, sans-serif; }
+      .ticket { width:${cfg.widthMm}mm; margin:0 auto; padding:${cfg.marginTopMm}mm ${cfg.gapPx*2}px ${cfg.marginBottomMm}mm; break-inside: avoid; page-break-inside: avoid; }
+      .top { text-align:center; font-size:${f(0.95)}px; color:#222; }
+      .org { font-weight:700; letter-spacing:.3px; }
+      .big { text-align:center; font-weight:900; font-size:${f(3.0)}px; margin-top:${cfg.gapPx*4}px; }
+      .name{ text-align:center; font-weight:600; font-size:${f(1.2)}px; margin-top:${cfg.gapPx*2}px; }
+      .meta{ text-align:center; font-size:${f(0.95)}px; line-height:1.35; margin-top:${cfg.gapPx*2}px; color:#333; }
+      .sep { border-top:1px dashed #555; margin:${cfg.gapPx*3}px auto; width:90%; }
+      .foot{ text-align:center; font-size:${f(0.9)}px; color:#444; margin-top:${cfg.gapPx*2}px; }
+    </style>
+  </head>
+  <body>
+    <div class="ticket">
+      <div class="top">
+        <div class="org">${cfg.orgao}</div>
+        <div>Sistema de Senhas — CadÚnico</div>
+      </div>
+      <div class="big">${cod}</div>
+      <div class="name">${(s.nome||'').toLowerCase().replace(/(^|\s)\S/g, t=>t.toUpperCase())}</div>
+      <div class="meta">
+        ${TIPO_TXT[s.tipo||'normal']}<br>
+        ${s.servico || '—'}
+      </div>
+      <div class="sep"></div>
+      <div class="meta">Emitido em: ${hora}</div>
+      <div class="foot">${defaultConfig.mensagem_aguarde}</div>
+      ${isTeste ? '<div class="foot" style="margin-top:6px">Impressão de teste</div>' : ''}
+    </div>
+  </body></html>`;
+}
+function imprimirSenha(s, isTeste=false){
+  const html = gerarHtmlTicket(s, isTeste);
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden','true');
+  iframe.style.position='fixed'; iframe.style.right='0'; iframe.style.bottom='0';
+  iframe.style.width='0'; iframe.style.height='0'; iframe.style.border='0'; iframe.style.visibility='hidden';
+  document.body.appendChild(iframe);
+  const idoc = (iframe.contentWindow || iframe).document;
+  idoc.open(); idoc.write(html); idoc.close();
+  const tryPrint = () => { try { (iframe.contentWindow || iframe).focus(); (iframe.contentWindow || iframe).print(); } finally { setTimeout(()=>iframe.remove(), 800); } };
+  setTimeout(tryPrint, 120);
+}
+
+/* Helpers */
+const $  = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>Array.from(el.querySelectorAll(s));
+const byId = (id)=>document.getElementById(id);
+const on = (el,ev,cb)=>el && el.addEventListener(ev,cb);
+
+function safeSet(id,val){ const el=byId(id); if(el!==null && el!==undefined){ el.value=val; }}
+function safeText(id,txt){ const el=byId(id); if(el){ el.textContent=txt; } }
+function onlyDigits(s){ return String(s||'').replace(/\D/g,''); }
+function escHtml(str){
+  return String(str ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+const now = ()=> new Date();
+const fmt = (x)=> x? new Date(x).toLocaleString('pt-BR'): '—';
+const diffMin = (a,b)=>{ try{ return Math.max(0, Math.round((new Date(b)-new Date(a))/60000)); }catch(_){ return 0; } };
+const durStr = (m)=> (isFinite(m)&&m>0) ? `${m} min` : '—';
+function toast(texto,tipo='info'){
+  const d=document.createElement('div');
+  d.className=`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-white ${tipo==='error'?'bg-red-600':tipo==='success'?'bg-green-600':'bg-blue-600'}`;
+  d.textContent=texto; document.body.appendChild(d); setTimeout(()=>d.remove(),2800);
+}
+async function withGuard(btn, label, fn){
+  const old = btn.textContent;
+  btn.disabled = true; btn.classList.add('btn-wait'); btn.textContent = label || 'Aguarde...';
+  try{ return await fn(); }
+  finally{ setTimeout(()=>{ btn.disabled=false; btn.classList.remove('btn-wait'); btn.textContent=old; }, 600); }
+}
+
+/* Controle de chamada ativa & estado do guichê */
+let orderSeqCache = 'P,N,G';
+let orderPosCache = 0;
+let guicheStateTimer = null;
+
+function segundosDesde(iso){
+  if(!iso) return Infinity;
+  const t = new Date(iso).getTime();
+  if(!isFinite(t)) return Infinity;
+  return Math.max(0, Math.round((Date.now() - t)/1000));
+}
+function getActiveCallWithinWindow(){
+  const win = (getPrintCfg().tempoChamada || 15);
+  const calls = (senhas||[])
+    .filter(s => s.status==='chamando' && s.chamadoEm && s.guiche)
+    .map(s => ({ s, age: segundosDesde(s.chamadoEm) }))
+    .sort((a,b)=>a.age - b.age);
+  const hit = calls.find(c => c.age <= win);
+  return hit ? { ...hit, left: Math.max(0, win - hit.age) } : null;
+}
+function updateGuicheCallState(){
+  if(telaAtiva!=='guiche') return;
+  const box = byId('guiche-state-msg');
+  if(!box) return;
+
+  const g   = String(guicheSelecionado());
+  const act = getActiveCallWithinWindow();
+
+  if(act){
+    if(String(act.s.guiche)===g){
+      box.innerHTML = `🔊 <b>Tá chamando o seu</b> — ${codigoDisplay(act.s)} • ${act.left}s`;
+    }else{
+      box.innerHTML = `⏳ <b>Já tem chamando</b> — Guichê ${act.s.guiche} (${codigoDisplay(act.s)}) • ${act.left}s`;
+    }
+  }else{
+    const temFila = senhas.some(x=>x.status==='aguardando');
+    box.innerHTML = temFila
+      ? `✅ <b>Vai chamar no próximo</b> — nenhuma chamada ativa agora`
+      : `—`;
+  }
+}
+
+/* Trata códigos de trava de fluxo vindos do backend */
+function handleGuicheFluxError(r){
+  if(!r) return false;
+  const code = r.code || r.errorCode;
+  if(code === 'GUICHE_EM_ATENDIMENTO' || code === 'GUICHE_COM_CHAMADA_PENDENTE'){
+    const cur = r.data || r.senha || null;
+    if(cur){
+      senhaAtual = cur;
+      atualizarSenhaAtual();
+      updateGuicheButtons();
+    }
+    updateGuicheCallState();
+    const msg = r.msg || (
+      code === 'GUICHE_EM_ATENDIMENTO'
+        ? 'Este guichê já está com atendimento em andamento.'
+        : 'Este guichê já possui uma chamada pendente no painel.'
+    );
+    toast(msg,'error');
+    return true;
+  }
+  return false;
+}
+
+/* Data Handler */
+const dataHandler = {
+  onDataChanged(data){
+    senhas = data || [];
+    saveSenhasSnapshot(senhas);
+
+    atualizarTodasEstatisticas();
+    atualizarListaAguardando();
+    atualizarProximasSenhas();
+    atualizarHistoricoCompleto();
+
+    if (telaAtiva === 'guiche') {
+      syncGuicheView();
+      updateGuicheCallState();
+    } else if (telaAtiva === 'tv') {
+      atualizarGridChamadas();
+      processaChamadasNovas();
+    }
+    if (telaAtiva === 'admin') {
+      renderMonitor();
+    }
+  }
+};
+
+/* Inicialização */
+document.addEventListener('DOMContentLoaded', async () => {
+  try{
+    safeText('titulo-sistema', defaultConfig.titulo_sistema);
+    safeText('nome-orgao',    defaultConfig.nome_orgao);
+
+    setAudioCfg(getAudioCfg());
+
+    initBairros();
+    initTvPin();
+
+    if(!localStorage.getItem('cadunico_services')){
+      localStorage.setItem('cadunico_services', JSON.stringify(cadunicoDefaultServices));
+    }
+    carregarServicos();
+    carregarServicosAdmin();
+    preencherSelectBairros();
+    desenharBairrosAdmin();
+    configurarEventos();
+    restaurarGuichesPersistidos();
+    applyGuicheLockUI();
+    mostrarTela('recepcao');
+
+    atualizarDataHora(); setInterval(atualizarDataHora,1000);
+    setPrintCfg(getPrintCfg());
+
+    const warmRows = loadSenhasSnapshot();
+    if(warmRows.length){
+      dataHandler.onDataChanged(warmRows);
+    }
+
+    await window.dataSdk.init(dataHandler);
+
+    try{
+      const o = await window.dataSdk.getOrder();
+      orderSeqCache = (o && o.order) || 'P,N,G';
+      orderPosCache = Number(o && o.pos || 0);
+      localStorage.setItem(ORDER_KEY, orderSeqCache);
+      safeText('ordem-atual', orderSeqCache.split(',').join(' – '));
+      safeSet('ordem-preset', orderSeqCache);
+      safeSet('ordem-custom', orderSeqCache);
+    }catch(_){}
+  }catch(e){
+    console.error(e);
+    toast('Iniciei em modo limitado (offline).','error');
+  }
+});
+
+/* Serviços padrão */
+const cadunicoDefaultServices = [
+  "Cadastro CadÚnico","Atualização de Dados CadÚnico","Emissão/Comprovante do CadÚnico",
+  "Inclusão/Exclusão de Membros","Transferência de Domicílio/CRAS","Correção de Dados/Entrevista",
+  "Programa Bolsa Família","Auxílio Gás dos Brasileiros",
+  "BPC/LOAS — Pessoa Idosa","BPC/LOAS — Pessoa com Deficiência",
+  "Tarifa Social de Energia Elétrica","Tarifa Social de Água/Esgoto (onde houver)",
+  "Minha Casa, Minha Vida / Cadastro Habitacional",
+  "ID Jovem","Carteira do Idoso (Gratuidade Intermunicipal/Interestadual)","Passe Livre Pessoa com Deficiência (Interestadual)",
+  "Isenção de Taxa de Concurso Público","Isenção 2ª Via RG/Certidões (onde houver convênio)",
+  "Acesso a Programas Sociais Municipais"
+];
+
+/* Eventos */
+function configurarEventos(){
+  on(byId('btn-recepcao'),'click', ()=>mostrarTela('recepcao'));
+  on(byId('btn-guiche'),  'click', ()=>mostrarTela('guiche'));
+  on(byId('btn-tv'),      'click', handleTvButtonClick);
+
+  // Guichê: persistência + trava por aba
+  on(byId('numero-guiche'), 'change', () => {
+    const v = String(byId('numero-guiche').value || '1');
+    localStorage.setItem(GUICHE_PREF_KEY, v);
+    if(isGuicheLocked()) sessionStorage.setItem(LOCK_NUM_KEY, v);
+    safeText('guiche-historico-numero', v);
+    syncGuicheView();
+  });
+  on(byId('lock-guiche'), 'change', (e)=>{
+    const sel = byId('numero-guiche');
+    if(e.target.checked){
+      sessionStorage.setItem(LOCK_FLAG_KEY, '1');
+      sessionStorage.setItem(LOCK_NUM_KEY, String(sel.value || '1'));
+      sel.disabled = true;
+      toast(`Guichê ${sel.value} travado nesta aba.`, 'success');
+    }else{
+      sessionStorage.removeItem(LOCK_FLAG_KEY);
+      sessionStorage.removeItem(LOCK_NUM_KEY);
+      sel.disabled = false;
+      toast('Trava desta aba desativada.', 'info');
+    }
+    applyGuicheLockUI();
+  });
+
+  // desbloqueio de áudio
+  on(byId('btn-unlock-audio'),'click', ()=>{
+    try{
+      const u = new SpeechSynthesisUtterance('Áudio ativado');
+      u.lang='pt-BR'; u.onend=()=>{ audioUnlocked=true; byId('audio-unlock').style.display='none'; toast('Som ativado na Tela TV','success'); };
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    }catch(_){ audioUnlocked=true; byId('audio-unlock').style.display='none'; }
+  });
+
+  // Admin
+  on(byId('btn-admin'),'click', ()=>{
+    afterLogin = 'admin';
+    openAdminModal(true);
+  });
+  on(byId('btn-admin-logout'),'click', ()=>{
+    localStorage.removeItem(ADMIN_KEY);
+    localStorage.removeItem(ADMIN_USER);
+    toast('Sessão do admin encerrada.','info');
+    mostrarTela('recepcao');
+  });
+  on(byId('btn-admin-cancel'),'click', ()=>openAdminModal(false));
+  on(byId('btn-admin-login'),'click', submitAdminLogin);
+  on(byId('admin-pass'),'keypress', (e)=>{ if(e.key==='Enter') submitAdminLogin(); });
+
+  on(byId('btn-go-estat'),'click', ()=>{
+    afterLogin = 'estatisticas';
+    openAdminModal(true);
+  });
+  on(byId('btn-voltar-admin'),'click', ()=>mostrarTela('admin'));
+
+  // formulário nova senha
+  on(byId('form-nova-senha'),'submit', async (e)=>{
+    e.preventDefault();
+    const nome   = byId('nome-pessoa').value.trim();
+    const cpf    = byId('cpf-pessoa').value.trim();
+    const bairro = byId('bairro-pessoa').value.trim();
+    const tipo   = byId('tipo-servico').value;
+    if(!nome)  return toast('Digite o nome da pessoa','error');
+    if(!bairro) return toast('Selecione o bairro da pessoa.','error');
+    if(!servicoSelecionado) return toast('Selecione um serviço','error');
+
+    await withGuard(byId('btn-submit-gerar'), 'Gerando...', async ()=>{
+      const res = await window.dataSdk.create({
+        nome,
+        cpf,
+        bairro,
+        tipo,
+        servico: servicoSelecionado,
+        setor: SETOR_PADRAO   // setor correto enviado ao createSenha
+      });
+      if(!res.isOk){ toast(res.msg||'Falha ao gerar senha','error'); return; }
+      const s = res.data;
+      mostrarUltimaSenha(s);
+      byId('form-nova-senha').reset(); servicoSelecionado=''; desenharServicos();
+      preencherSelectBairros();
+      if(byId('print-auto').checked){ imprimirSenha(s,false); }
+      if(res.reused) toast('Clique duplo detectado: senha anterior reaproveitada.','info');
+    });
+  });
+
+  const maskCpf = (el)=>{ let v=el.value.replace(/\D/g,''); v=v.slice(0,11).replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2'); el.value=v; };
+  on(byId('cpf-pessoa'),'input', (e)=>maskCpf(e.target));
+  on(byId('busca-cpf'), 'input', (e)=>{
+    const v = e.target.value;
+    const digits = onlyDigits(v);
+    if(digits.length >= v.replace(/\s/g,'').length/2){ maskCpf(e.target); }
+  });
+
+  on(byId('btn-atualizar-lista'),'click', ()=>window.dataSdk.refresh());
+
+  // Guichê – fluxo
+  on(byId('btn-chamar-proximo'),'click',  (ev)=>withGuard(ev.target,'Chamando...', async ()=>{
+    const g = guicheSelecionado();
+    const setor = setorDestinoSelecionado();
+    const r = await window.dataSdk.callNext(g, setor);
+    if(!r?.ok){
+      if(handleGuicheFluxError(r)) return;
+      toast(r?.msg||'Não há senhas aguardando','info'); 
+      return;
+    }
+    senhaAtual=r.data; 
+    atualizarSenhaAtual();
+
+    if(r.order)   orderSeqCache = r.order;
+    if(r.nextPos !== undefined) orderPosCache = Number(r.nextPos)||0;
+
+    atualizarProximasSenhas();
+    updateGuicheCallState();
+  }));
+
+  on(byId('btn-chamar-novamente'),'click', (ev)=>withGuard(ev.target,'Chamando...', async ()=>{
+    if(!senhaAtual){ toast('Nenhuma senha selecionada.','info'); return; }
+    const r = await window.dataSdk.repeat(senhaAtual.id);
+    if(!r?.ok){
+      if(handleGuicheFluxError(r)) return;
+      toast(r?.msg||'Falha ao chamar novamente','error'); 
+      return;
+    }
+    senhaAtual = Object.assign({}, senhaAtual, { chamadoEm: r.data?.chamadoEm || new Date().toISOString(), status: 'chamando' });
+    toast('Chamado novamente!','success');
+
+    const ord = await window.dataSdk.getOrder();
+    if(ord && ord.order){ orderSeqCache = ord.order; orderPosCache = Number(ord.pos||0); }
+
+    atualizarSenhaAtual();
+    atualizarProximasSenhas();
+    updateGuicheCallState();
+  }));
+
+  on(byId('btn-iniciar-atendimento'),'click',(ev)=>withGuard(ev.target,'Iniciando...', async ()=>{
+    if(!senhaAtual) return;
+    const r = await window.dataSdk.start(senhaAtual.id);
+    if(!r?.ok){ toast(r?.msg||'Falha ao iniciar','error'); return; }
+    senhaAtual.status='atendendo'; senhaAtual.iniciadoEm=new Date().toISOString();
+    atualizarSenhaAtual();
+    toast('Atendimento iniciado!','success');
+  }));
+
+  on(byId('btn-nao-compareceu'),'click',(ev)=>withGuard(ev.target,'Marcando...', async ()=>{
+    if(!senhaAtual) return;
+    const r = await window.dataSdk.noShow(senhaAtual.id);
+    if(!r?.ok){ toast(r?.msg||'Falha ao marcar Não Compareceu','error'); return; }
+    senhaAtual=null; 
+    atualizarSenhaAtual();
+    toast('Marcado como não compareceu','info');
+    updateGuicheCallState();
+  }));
+
+  on(byId('btn-finalizar-atendimento'),'click',(ev)=>withGuard(ev.target,'Finalizando...', async ()=>{
+    if(!senhaAtual) return;
+    const r = await window.dataSdk.finish(senhaAtual.id);
+    if(!r?.ok){ toast(r?.msg||'Falha ao finalizar','error'); return; }
+    senhaAtual=null; 
+    atualizarSenhaAtual();
+    toast('Atendimento finalizado!','success');
+    updateGuicheCallState();
+  }));
+
+  // Chamada manual usando callSenhaManual
+  on(byId('btn-chamar-manual'),'click', (ev)=>withGuard(ev.target,'Chamando...', async ()=>{
+    const codigo = (byId('manual-codigo').value || '').trim().toUpperCase();
+    const nome   = (byId('manual-nome').value || '').trim();
+    const serv   = (byId('manual-servico').value || '').trim();
+    if(!codigo){ toast('Informe o código da senha manual (ex.: N001).','error'); return; }
+
+    const payload = {
+      codigo,
+      guiche: guicheSelecionado(),
+      setor: setorDestinoSelecionado(),
+      nome,
+      servico: serv
+    };
+
+    const r = await window.dataSdk.callManual(payload);
+    if(!r?.ok){
+      if(handleGuicheFluxError(r)) return;
+      toast(r?.msg || 'Falha ao chamar senha manual.','error');
+      return;
+    }
+    const s = r.data || r.senha || null;
+    if(!s){ toast('Resposta inválida da chamada manual.','error'); return; }
+
+    senhaAtual = s;
+    atualizarSenhaAtual();
+    atualizarProximasSenhas();
+    updateGuicheCallState();
+    toast('Senha manual chamada com sucesso!','success');
+  }));
+
+  // Áudio admin
+  on(byId('volume-audio'),'input',(e)=>{ configAudio.volume=parseFloat(e.target.value); safeText('volume-display',Math.round(configAudio.volume*100)+'%'); });
+  on(byId('velocidade-fala'),'input',(e)=>{ configAudio.velocidade=parseFloat(e.target.value); safeText('velocidade-display',configAudio.velocidade+'x'); });
+  on(byId('repeticoes-anuncio'),'change',(e)=>{ configAudio.repeticoes=parseInt(e.target.value,10)||4; });
+  on(byId('btn-testar-audio'),'click',()=>{ if(telaAtiva!=='tv'){ toast('O som só toca na Tela TV.','info'); return; } speakText('Teste de áudio do sistema de senhas.', 2); });
+  on(byId('btn-salvar-audio'),'click', ()=>{ setAudioCfg(configAudio); toast('Configurações de áudio salvas.','success'); });
+
+  // Guichês e impressão
+  on(byId('numero-guiches'),'change',()=>{
+    const v = byId('numero-guiches').value;
+    byId('wrap-guiches-custom').classList.toggle('hidden', v!=='custom');
+  });
+  on(byId('btn-aplicar-guiches'),'click',()=>{
+    const sel = byId('numero-guiches').value;
+    const n = (sel==='custom') ? (parseInt(byId('numero-guiches-custom').value,10)||6) : (parseInt(sel,10)||6);
+    localStorage.setItem(GUICHES_KEY, String(n));
+    setPrintCfg({ tempoChamada: parseInt(byId('tempo-chamada').value,10)||15 });
+    atualizarGuiches(); 
+    applyGuicheLockUI();
+    toast('Configurações de guichês aplicadas.','success');
+  });
+
+  on(byId('btn-adicionar-servico'),'click', adicionarServico);
+  on(byId('novo-servico'),'keypress',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); adicionarServico(); }});
+
+  // Bairros & PIN TV
+  on(byId('btn-adicionar-bairro'),'click', adicionarBairro);
+  on(byId('novo-bairro'),'keypress',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); adicionarBairro(); }});
+  on(byId('tv-pin'),'change',(e)=>{ setTvPinLocal(e.target.value); });
+
+  // PIN da Tela TV
+  on(byId('btn-tv-pin-ok'),'click', submitTvPin);
+  on(byId('tv-pin-input'),'keypress',(e)=>{ if(e.key==='Enter') submitTvPin(); });
+  on(byId('btn-tv-pin-cancel'),'click', ()=>openTvPinModal(false));
+
+  on(byId('preset-largura'),'change',(e)=>{ setPrintCfg({widthMm: parseFloat(e.target.value)}); });
+  ['print-width','print-font','print-mt','print-mb','print-gap','print-orgao'].forEach(id=>{
+    on(byId(id),'change',()=>syncPrintFromInputs());
+    on(byId(id),'input', ()=>syncPrintFromInputs());
+  });
+  on(byId('btn-imprimir-teste'),'click', ()=>{
+    imprimirSenha({
+      numero:'A002',
+      nome:'Exemplo de Teste',
+      tipo:'normal',
+      servico:'Tarifa Social de Energia Elétrica',
+      timestamp:new Date().toISOString()
+    }, true);
+  });
+  on(byId('btn-imprimir-ultima'),'click', ()=>{ if(lastGenerated) imprimirSenha(lastGenerated); });
+  on(byId('btn-reimprimir-ultima'),'click', ()=>{ if(lastGenerated) imprimirSenha(lastGenerated); });
+
+  // Busca CPF/Nome
+  on(byId('btn-buscar-cpf'), async ()=>{
+    const q = byId('busca-cpf').value.trim();
+    if(!q){ toast('Digite um CPF ou Nome.','error'); return; }
+    const digits = onlyDigits(q);
+    const btn = byId('btn-buscar-cpf');
+    await withGuard(btn, 'Buscando...', async ()=>{
+      let res = [];
+      try{
+        if(digits.length === 11){
+          res = await window.dataSdk.searchCPF(digits,'','');
+        }else{
+          if(q.length < 3){ toast('Digite pelo menos 3 letras do nome.','error'); return; }
+          res = await window.dataSdk.searchNome(q,'','');
+        }
+      }catch(_){ res = []; }
+
+      if((!res || !res.length) && Array.isArray(senhas) && senhas.length){
+        const ql = q.toLowerCase();
+        res = digits.length===11
+          ? senhas.filter(x => onlyDigits(x.cpf) === digits)
+          : senhas.filter(x => String(x.nome||'').toLowerCase().includes(ql));
+      }
+      renderBuscaCPF(res||[], q);
+    });
+  });
+  on(byId('btn-exportar-cpf'), ()=>exportarListaCPF());
+  on(byId('busca-cpf'), 'keypress', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); byId('btn-buscar-cpf').click(); }
+  });
+
+  // Ações administrativas
+  on(byId('btn-limpar-historico'), async ()=>{
+    if(!confirm('Limpar TODAS as senhas de HOJE da planilha? Esta ação não pode ser desfeita.')) return;
+    const r = await window.dataSdk.clearToday();
+    if(!r?.ok){ toast(r?.msg||'Falha ao limpar histórico de hoje.','error'); return; }
+    toast(`Registros de hoje removidos: ${r.removidos||0}`, 'success');
+    await window.dataSdk.refresh();
+  });
+
+  on(byId('btn-resetar-contadores'), async ()=>{
+    const r = await window.dataSdk.resetCounters();
+    if(!r?.ok){ toast(r?.msg||'Falha ao resetar contadores.','error'); return; }
+    toast('Contadores do dia resetados.', 'success');
+    await window.dataSdk.refresh();
+  });
+
+  on(byId('btn-exportar-dados'), async ()=>{
+    const d = todayStr();
+    let rows = [];
+    try{
+      rows = await window.dataSdk.getPeriodo(d, d);
+    }catch(_){}
+    if(!rows || !rows.length){
+      rows = (senhas||[]).filter(x => (x.data||'').slice(0,10) === d);
+    }
+    if(!rows.length){ toast('Sem dados para exportar hoje.','info'); return; }
+    exportarCSV(rows, `dados-hoje-${d}.csv`);
+  });
+
+  // Ordem de chamada
+  on(byId('ordem-preset'), 'change', ()=>{ byId('ordem-custom').value = byId('ordem-preset').value; });
+  on(byId('btn-aplicar-ordem'), 'click', async ()=>{
+    const raw = (byId('ordem-custom').value || byId('ordem-preset').value || '').toUpperCase().replace(/\s/g,'');
+    const ok = /^([NPG],?){2,}$/.test(raw);
+    if(!ok){ toast('Formato inválido. Use somente N,P,G separados por vírgula.', 'error'); return; }
+    const parts = raw.split(',').filter(Boolean);
+    const seen = new Set(); const final = [];
+    for(const l of parts){ if(['N','P','G'].includes(l) && !seen.has(l)){ final.push(l); seen.add(l); } }
+    ['N','P','G'].forEach(l=>{ if(!seen.has(l)) final.push(l); });
+    const seq = final.slice(0,3).join(',');
+    const btn = byId('btn-aplicar-ordem');
+    await withGuard(btn, 'Aplicando...', async ()=>{
+      const r = await window.dataSdk.setOrder(seq);
+      if(!r?.ok){ toast(r?.msg||'Falha ao salvar ordem.', 'error'); return; }
+      localStorage.setItem(ORDER_KEY, seq);
+      orderSeqCache = seq;
+      safeText('ordem-atual', seq.split(',').join(' – '));
+      toast('Ordem aplicada!', 'success');
+      atualizarProximasSenhas();
+    });
+  });
+
+  // Monitor
+  on(byId('btn-monitor-refresh'),'click', ()=>renderMonitor());
+  on(byId('monitor-auto'),'change', (e)=>{ if(e.target.checked){ renderMonitor(); }});
+
+  // Modal detalhe
+  on(byId('btn-fechar-detalhe'), 'click', ()=>toggleDetalhe(false));
+
+  // Config no Admin
+  on(byId('btn-salvar-config-admin'),'click', async ()=>{
+    const snapshot = buildConfigSnapshot();
+    const btn = byId('btn-salvar-config-admin');
+    await withGuard(btn, 'Salvando...', async ()=>{
+      persistLocalFromConfig(snapshot.config);
+      const r = await window.dataSdk.saveConfig(snapshot.config);
+      if(r?.ok){ toast('Configurações salvas no servidor.','success'); }
+      else { toast(r?.msg || 'Servidor indisponível. Salvo apenas localmente.', 'error'); }
+    });
+  });
+
+  on(byId('btn-importar-config-admin'),'click', ()=> byId('file-import-config-admin').click());
+  on(byId('file-import-config-admin'),'change', async (e)=>{
+    const file = e.target.files?.[0];
+    if(!file) return;
+    try{
+      const text = await file.text();
+      const obj = JSON.parse(text);
+      await applyImportedConfig(obj.config || obj);
+      const r = await window.dataSdk.saveConfig(buildConfigSnapshot().config);
+      if(r?.ok){ toast('Config importada e salva no servidor.','success'); }
+      else { toast('Importada. Servidor indisponível; mantida localmente.', 'error'); }
+    }catch(err){
+      console.error(err);
+      toast('Arquivo inválido ou erro na importação.','error');
+    }finally{
+      e.target.value = '';
+    }
+  });
+
+  on(byId('btn-exportar-config-admin'),'click', ()=>{
+    const snap = buildConfigSnapshot();
+    exportarJSON(snap, `config-cadunico-${todayStr()}.json`);
+  });
+}
+
+/* Admin modal */
+function openAdminModal(show){
+  const m = byId('admin-modal');
+  if(show){ m.style.display='flex'; m.removeAttribute('aria-hidden'); setTimeout(()=>byId('admin-user')?.focus(), 50); }
+  else { m.style.display='none'; m.setAttribute('aria-hidden','true'); safeText('admin-login-msg',''); safeSet('admin-pass',''); }
+}
+async function submitAdminLogin(){
+  const u = byId('admin-user').value.trim();
+  const p = byId('admin-pass').value;
+  const btn = byId('btn-admin-login');
+  await withGuard(btn, 'Entrando...', async ()=>{
+    const r = await window.dataSdk.validateAdmin?.(u,p);
+    const okLocal = (u==='admin' && p==='admin12345');
+    const ok = (r && r.ok) || okLocal;
+    if(!ok){ safeText('admin-login-msg', r?.msg || 'Acesso negado.'); return; }
+
+    openAdminModal(false);
+    toast('Admin autenticado!','success');
+
+    if(afterLogin === 'estatisticas'){
+      presetPeriodoRapido('hoje');
+      mostrarTela('estatisticas');
+      carregarEstatisticas();
+    } else {
+      mostrarTela('admin');
+    }
+    afterLogin = null;
+  });
+}
+
+/* TELA */
+function mostrarTela(t){
+  ['tela-recepcao','tela-guiche','tela-tv','tela-admin','tela-estatisticas'].forEach(id=>byId(id).classList.add('hidden'));
+  byId(`tela-${t}`).classList.remove('hidden');
+  telaAtiva = t;
+
+  if (t === 'guiche'){
+    applyGuicheLockUI();
+    syncGuicheView();
+    if(guicheStateTimer) clearInterval(guicheStateTimer);
+    guicheStateTimer = setInterval(updateGuicheCallState, 1000);
+    updateGuicheCallState();
+  } else {
+    if(guicheStateTimer) { clearInterval(guicheStateTimer); guicheStateTimer = null; }
+  }
+
+  if (t === 'tv'){
+    primeTvSeen();
+    atualizarGridChamadas();
+    if(!audioUnlocked && 'speechSynthesis' in window){
+      byId('audio-unlock').style.display='grid';
+    }
+  }
+}
+
+/* PIN Tela TV */
+function handleTvButtonClick(){
+  if(!tvPinConfig){
+    tvPinUnlocked = true;
+    mostrarTela('tv');
+    return;
+  }
+  if(tvPinUnlocked){
+    mostrarTela('tv');
+    return;
+  }
+  openTvPinModal(true);
+}
+function openTvPinModal(show){
+  const m = byId('tv-pin-modal');
+  if(!m) return;
+  if(show){
+    const input = byId('tv-pin-input');
+    const msg   = byId('tv-pin-msg');
+    if(input) input.value = '';
+    if(msg) msg.textContent = '';
+    m.style.display='flex';
+    m.removeAttribute('aria-hidden');
+    setTimeout(()=>input && input.focus(), 60);
+  }else{
+    m.style.display='none';
+    m.setAttribute('aria-hidden','true');
+  }
+}
+function submitTvPin(){
+  const input = byId('tv-pin-input');
+  const msg   = byId('tv-pin-msg');
+  const valor = (input?.value || '').trim();
+  if(!valor){
+    if(msg) msg.textContent='Informe o PIN.';
+    return;
+  }
+  if(valor === tvPinConfig){
+    tvPinUnlocked = true;
+    openTvPinModal(false);
+    toast('Tela TV liberada neste dispositivo.','success');
+    mostrarTela('tv');
+  }else{
+    if(msg) msg.textContent='PIN incorreto.';
+  }
+}
+
+/* Serviços (UI) */
+function loadServices(){ return JSON.parse(localStorage.getItem('cadunico_services')||'[]'); }
+function saveServices(arr){ localStorage.setItem('cadunico_services', JSON.stringify(arr||[])); }
+function carregarServicos(){ desenharServicos(); }
+function desenharServicos(){
+  const c=byId('servicos-lista'); const arr=loadServices();
+  c.innerHTML = arr.map(s=>{
+    const sel=(servicoSelecionado===s); const esc=s.replace(/'/g,"\\'");
+    return `<div class="p-3 border-2 rounded-lg cursor-pointer ${sel?'bg-blue-100 border-blue-600':'border-slate-300 hover:border-blue-300'}" onclick="window.selecionarServico('${esc}')">
+      <div class="flex items-center gap-3">
+        <div class="w-5 h-5 rounded-full ${sel?'bg-blue-600':'border border-slate-400'}"></div>
+        <span class="font-medium">${s}</span>
+      </div></div>`;
+  }).join('');
+}
+window.selecionarServico = (s)=>{ servicoSelecionado=s; desenharServicos(); };
+
+function carregarServicosAdmin(){
+  const c=byId('lista-servicos-admin');
+  const arr=loadServices();
+  c.innerHTML = arr.map(s=>`
+    <div class="flex items-center justify-between p-2 bg-white border rounded">
+      <span class="text-sm">${s}</span>
+      <button class="text-red-600 hover:text-red-700 text-xs" onclick="window.removerServico('${s.replace(/'/g,"\\'")}')">Remover</button>
+    </div>`).join('');
+}
+function adicionarServico(){
+  const n=byId('novo-servico').value.trim();
+  if(!n) return toast('Digite o nome do serviço','error');
+  const arr=loadServices();
+  if(arr.includes(n)) return toast('Este serviço já existe','error');
+  arr.push(n); saveServices(arr); byId('novo-servico').value='';
+  carregarServicos(); carregarServicosAdmin(); toast('Serviço adicionado!','success');
+}
+window.removerServico = (s)=>{
+  const arr=loadServices().filter(x=>x!==s); saveServices(arr);
+  carregarServicos(); carregarServicosAdmin(); toast('Serviço removido!','success');
+};
+
+/* Bairros (UI) */
+function getBairros(){
+  return bairrosConfig && bairrosConfig.length ? bairrosConfig : loadBairrosLocal();
+}
+function preencherSelectBairros(){
+  const sel = byId('bairro-pessoa');
+  if(!sel) return;
+  const arr = getBairros();
+  if(!arr.length){
+    sel.innerHTML = '<option value="" disabled selected>Cadastre os bairros no Admin</option>';
+    sel.required = false;
+    return;
+  }
+  let html = '<option value="" disabled selected>Selecione um bairro...</option>';
+  html += arr.map(b => `<option value="${escHtml(b)}">${escHtml(b)}</option>`).join('');
+  sel.innerHTML = html;
+  sel.required = true;
+}
+function desenharBairrosAdmin(){
+  const cont = byId('lista-bairros-admin');
+  if(!cont) return;
+  const arr = getBairros();
+  if(!arr.length){
+    cont.innerHTML = '<div class="text-xs text-slate-500">Nenhum bairro cadastrado ainda.</div>';
+    return;
+  }
+  cont.innerHTML = arr.map(b=>`
+    <div class="flex items-center justify-between p-1 bg-white border rounded">
+      <span class="text-sm">${escHtml(b)}</span>
+      <button type="button" class="text-red-600 hover:text-red-700 text-xs" onclick="window.removerBairro('${b.replace(/'/g,"\\'")}')">Remover</button>
+    </div>`).join('');
+}
+function adicionarBairro(){
+  const input = byId('novo-bairro');
+  if(!input) return;
+  const nome = input.value.trim();
+  if(!nome){ toast('Digite o nome do bairro.','error'); return; }
+  const atual = getBairros();
+  if(atual.includes(nome)){
+    toast('Este bairro já está cadastrado.','error');
+    return;
+  }
+  const novo = atual.concat([nome]);
+  saveBairrosLocal(novo);
+  input.value = '';
+  toast('Bairro adicionado!','success');
+}
+window.removerBairro = function(nome){
+  const atual = getBairros().filter(b => b !== nome);
+  saveBairrosLocal(atual);
+  toast('Bairro removido.','success');
+};
+
+/* UI Atualizações */
+function mostrarUltimaSenha(s){
+  lastGenerated = s;
+  safeText('numero-gerado', codigoDisplay(s));
+  safeText('nome-gerado',   s.nome);
+  safeText('tipo-gerado',   TIPO_TXT[s.tipo||'normal']);
+  byId('ultima-senha').classList.remove('hidden');
+}
+function guicheSelecionado(){ return String(byId('numero-guiche').value || '1'); }
+function setorDestinoSelecionado(){
+  const el = byId('setor-guiche');
+  return el ? el.value : 'Guichês';
+}
+function obterAtendimentoDoGuiche(g){
+  const atual = senhas
+    .filter(s => String(s.guiche) === String(g) && (s.status === 'chamando' || s.status === 'atendendo'))
+    .sort((a,b) => new Date(b.chamadoEm) - new Date(a.chamadoEm))[0];
+  return atual || null;
+}
+function syncGuicheView(){
+  const g = guicheSelecionado();
+  senhaAtual = obterAtendimentoDoGuiche(g) || null;
+  atualizarSenhaAtual();
+  atualizarHistoricoGuiche();
+}
+function atualizarSenhaAtual(){
+  if(senhaAtual){
+    safeText('senha-atual-numero', codigoDisplay(senhaAtual));
+    safeText('senha-atual-nome',   senhaAtual.nome);
+    let status = TIPO_TXT[senhaAtual.tipo||'normal'];
+    if(senhaAtual.status==='chamando') status+=' - Chamando';
+    else if(senhaAtual.status==='atendendo'){
+      status+=' - Em Atendimento';
+      const mins = Math.round((new Date()-new Date(senhaAtual.iniciadoEm))/60000);
+      if(isFinite(mins)) status+=` (${mins} min)`;
+    }
+    safeText('senha-atual-tipo', status);
+  }else{
+    safeText('senha-atual-numero','-');
+    safeText('senha-atual-nome','-');
+    safeText('senha-atual-tipo','Nenhuma senha em atendimento');
+  }
+  updateGuicheButtons();
+}
+
+/* Botões Guichê */
+function updateGuicheButtons(){
+  const bNext  = byId('btn-chamar-proximo');
+  const bRep   = byId('btn-chamar-novamente');
+  const bStart = byId('btn-iniciar-atendimento');
+  const bNo    = byId('btn-nao-compareceu');
+  const bFin   = byId('btn-finalizar-atendimento');
+  if(!bNext||!bRep||!bStart||!bNo||!bFin) return;
+
+  if(!senhaAtual){
+    bNext.disabled  = false;
+    bRep.disabled   = true;
+    bStart.disabled = true;
+    bNo.disabled    = true;
+    bFin.disabled   = true;
+    return;
+  }
+  const st = senhaAtual.status;
+  if(st === 'chamando'){
+    bNext.disabled  = true;
+    bRep.disabled   = false;
+    bStart.disabled = false;
+    bNo.disabled    = false;
+    bFin.disabled   = true;
+  }else if(st === 'atendendo'){
+    bNext.disabled  = true;
+    bRep.disabled   = true;
+    bStart.disabled = true;
+    bNo.disabled    = true;
+    bFin.disabled   = false;
+  }else{
+    bNext.disabled  = false;
+    bRep.disabled   = true;
+    bStart.disabled = true;
+    bNo.disabled    = true;
+    bFin.disabled   = true;
+  }
+}
+
+function atualizarProximasSenhas(){
+  const c=byId('proximas-senhas-guiche');
+
+  const filas = {
+    N: senhas.filter(s=>s.status==='aguardando' && s.tipo==='normal')
+             .sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)),
+    P: senhas.filter(s=>s.status==='aguardando' && s.tipo==='prioritario')
+             .sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)),
+    G: senhas.filter(s=>s.status==='aguardando' && s.tipo==='agendamento')
+             .sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)),
+  };
+
+  const order = (orderSeqCache || localStorage.getItem(ORDER_KEY) || 'P,N,G').split(',');
+  let pos = Number(orderPosCache||0) % order.length;
+
+  const out = [];
+  const limit = 8;
+  let guard=0;
+
+  while(out.length<limit && guard<100){
+    guard++;
+    let added=false;
+    for(let i=0;i<order.length && out.length<limit;i++){
+      const idx=(pos+i)%order.length;
+      const L=order[idx];
+      const arr=filas[L];
+      if(arr && arr.length){
+        out.push(arr.shift());
+        pos=(idx+1)%order.length;
+        added=true;
+      }
+    }
+    if(!added) break;
+  }
+
+  if(!out.length){
+    c.innerHTML='<div class="text-center text-slate-500 text-sm">Nenhuma senha na fila</div>';
+    return;
+  }
+  c.innerHTML = out.map((s,i)=>`
+    <div class="p-2 bg-white rounded border ${i===0?'border-yellow-400 bg-yellow-50':'border-slate-200'}">
+      <div class="text-center">
+        <div class="font-semibold text-sm">${codigoDisplay(s)}</div>
+        <div class="text-xs text-slate-600">${s.nome}</div>
+        <div class="text-xs text-slate-500">${TIPO_TXT[s.tipo||'normal']}</div>
+        ${i===0?'<div class="text-[11px] text-yellow-700 mt-1">Próximo</div>':''}
+      </div>
+    </div>`).join('');
+}
+function atualizarHistoricoGuiche(){
+  const g = byId('numero-guiche').value || '1';
+  safeText('guiche-historico-numero', g);
+
+  const c = byId('historico-guiche');
+  const hist = senhas
+    .filter(s => (s.status === 'atendida' || s.status === 'nao_compareceu') &&
+                 String(s.guiche) === String(g))
+    .sort((a,b) => new Date(b.chamadoEm) - new Date(a.chamadoEm))
+    .slice(0, 12);
+
+  if(!hist.length){
+    c.innerHTML = '<div class="p-4 text-center text-slate-500">Nenhum atendimento realizado</div>';
+    return;
+  }
+
+  c.innerHTML = hist.map(s => `
+    <div class="p-3 flex justify-between items-center">
+      <div class="flex-1">
+        <div class="font-semibold">
+          ${codigoDisplay(s)}
+          <span class="ml-2 text-slate-800">${s.nome}</span>
+          <span class="ml-2 text-sm text-slate-600">${TIPO_TXT[s.tipo||'normal']}</span>
+          ${s.status==='nao_compareceu' ? '<span class="ml-2 chip chip-red">Não compareceu</span>' : ''}
+        </div>
+        <div class="text-xs text-slate-500 mt-1">
+          Espera: ${s.tempoEspera||0} min
+          ${s.tempoAtendimento ? `| Atendimento: ${s.tempoAtendimento} min` : ''}
+        </div>
+      </div>
+      <div class="text-sm text-slate-500">${new Date(s.chamadoEm).toLocaleString('pt-BR')}</div>
+    </div>`).join('');
+}
+
+function atualizarHistoricoCompleto(){
+  const c=byId('historico-completo');
+  const hist = senhas.filter(s=>s.status==='atendida')
+    .sort((a,b)=>new Date(b.chamadoEm)-new Date(a.chamadoEm));
+  if(!hist.length){ c.innerHTML='<div class="p-4 text-center text-slate-500">Nenhum atendimento realizado</div>'; return; }
+  c.innerHTML = hist.map(s=>`
+    <div class="p-3 flex justify-between items-center clickable item-hist" data-id="${s.id}">
+      <div class="flex-1">
+        <div class="font-semibold">${codigoDisplay(s)} <span class="ml-2 text-slate-800">${s.nome}</span> <span class="ml-2 text-sm text-slate-600">${TIPO_TXT[s.tipo||'normal']}</span></div>
+        <div class="text-xs text-slate-500 mt-1">Espera: ${s.tempoEspera||0} min ${s.tempoAtendimento?`| Atendimento: ${s.tempoAtendimento} min`:''}</div>
+      </div>
+      <div class="text-sm text-slate-500">${new Date(s.chamadoEm).toLocaleString('pt-BR')}</div>
+    </div>`).join('');
+
+  c.onclick = (ev)=>{
+    const row = ev.target.closest('.item-hist');
+    if(!row) return;
+    const id = row.dataset.id;
+    const o = senhas.find(x=>x.id===id);
+    if(o) abrirDetalhe(o);
+  };
+}
+function abrirDetalhe(o){
+  const el = byId('detalhe-conteudo');
+  el.innerHTML = `
+    <div class="grid sm:grid-cols-2 gap-3">
+      <div><b>Senha:</b> ${codigoDisplay(o)}</div>
+      <div><b>Tipo:</b> ${TIPO_TXT[o.tipo||'normal']}</div>
+      <div><b>Nome:</b> ${o.nome||'—'}</div>
+      <div><b>CPF:</b> ${o.cpf||'—'}</div>
+      <div><b>Bairro:</b> ${o.bairro||'—'}</div>
+      <div class="sm:col-span-2"><b>Serviço:</b> ${o.servico||'—'}</div>
+      <div><b>Criado:</b> ${fmt(o.timestamp)}</div>
+      <div><b>Chamado:</b> ${fmt(o.chamadoEm)}</div>
+      <div><b>Início:</b> ${fmt(o.iniciadoEm)}</div>
+      <div><b>Finalizado:</b> ${fmt(o.finalizadoEm)}</div>
+      <div><b>Status:</b> ${mapStatus(o.status)}</div>
+      <div><b>Guichê:</b> ${o.guiche||'—'}</div>
+      <div><b>Chamadas:</b> ${o.calls||0}</div>
+      <div><b>Espera (min):</b> ${o.tempoEspera||'—'}</div>
+      <div><b>Atendimento (min):</b> ${o.tempoAtendimento||'—'}</div>
+      <div class="sm:col-span-2 text-xs text-slate-400"><b>ID:</b> ${o.id}</div>
+    </div>`;
+  toggleDetalhe(true);
+}
+function toggleDetalhe(show){
+  const m = byId('detalhe-modal');
+  if(show){ m.style.display='flex'; m.removeAttribute('aria-hidden'); }
+  else { m.style.display='none'; m.setAttribute('aria-hidden','true'); }
+}
+
+function atualizarTodasEstatisticas(){
+  const total=senhas.length;
+  const atendidas=senhas.filter(s=>s.status==='atendida').length;
+  const aguardando=senhas.filter(s=>s.status==='aguardando').length;
+  const chamando=senhas.filter(s=>s.status==='chamando'||s.status==='atendendo').length;
+  safeText('total-senhas',total);
+  safeText('total-atendidas',atendidas);
+  safeText('total-aguardando',aguardando);
+  safeText('admin-total-senhas',total);
+  safeText('admin-total-atendidas',atendidas);
+  safeText('admin-total-aguardando',aguardando);
+  safeText('admin-total-chamando',chamando);
+  const cont={}; senhas.filter(s=>s.status==='atendida' && s.guiche).forEach(s=>{ cont[s.guiche]=(cont[s.guiche]||0)+1; });
+  byId('stats-por-guiche').innerHTML = Object.entries(cont).sort((a,b)=>a[0]-b[0])
+    .map(([g,c])=>`<div class="flex justify-between text-sm"><span>Guichê ${g}:</span><span class="font-medium">${c}</span></div>`).join('') || '<div class="text-sm text-slate-500">Sem dados ainda.</div>';
+  atualizarStatsBairrosDia();
+}
+
+/* Estatística por bairros (Recepção + Admin) */
+function atualizarStatsBairrosDia(){
+  const hoje = todayStr();
+  const counts = {};
+  (senhas || []).forEach(s=>{
+    const b = (s.bairro || '').trim();
+    if(!b) return;
+    const dataBase = (s.data || s.timestamp || '').slice(0,10);
+    if(dataBase && dataBase !== hoje) return;
+    counts[b] = (counts[b] || 0) + 1;
+  });
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+
+  const el = byId('stats-bairros-dia');
+  const elAdmin = byId('stats-por-bairro-admin');
+
+  if(!entries.length){
+    if(el) el.innerHTML = '<div class="text-xs text-slate-500">Nenhum atendimento com bairro informado hoje.</div>';
+    if(elAdmin) elAdmin.innerHTML = '<div class="text-sm text-slate-500">Sem dados de bairros hoje.</div>';
+    return;
+  }
+
+  const top5 = entries.slice(0,5);
+  if(el){
+    el.innerHTML = top5.map(([b,q])=>`
+      <div class="flex justify-between text-sm">
+        <span>${escHtml(b)}</span>
+        <span class="font-semibold">${q}</span>
+      </div>`).join('');
+  }
+
+  if(elAdmin){
+    const top10 = entries.slice(0,10);
+    elAdmin.innerHTML = top10.map(([b,q])=>`
+      <div class="flex justify-between text-sm">
+        <span>${escHtml(b)}</span>
+        <span class="font-semibold">${q}</span>
+      </div>`).join('');
+  }
+}
+
+function atualizarListaAguardando(){
+  const c=byId('lista-aguardando');
+  const lista = senhas.filter(s=>s.status==='aguardando');
+  if(!lista.length){ c.innerHTML='<div class="p-4 text-center text-slate-500">Nenhuma senha aguardando</div>'; return; }
+  c.innerHTML = lista.map(s=>`
+    <div class="p-3 flex justify-between items-center hover:bg-slate-50">
+      <div class="flex-1 flex items-center gap-3">
+        <span class="font-bold text-lg text-blue-600">${codigoDisplay(s)}</span>
+        <div>
+          <div class="font-medium">${s.nome}</div>
+          <div class="text-sm text-slate-600">${s.servico}</div>
+          <div class="text-xs text-slate-500">${TIPO_TXT[s.tipo||'normal']} — ${new Date(s.timestamp).toLocaleTimeString('pt-BR')}</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-xs" onclick='window.imprimirPorId("${s.id}")'>Imprimir</button>
+        <button class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs" onclick='window.editarSenha("${s.id}")'>Editar</button>
+        <button class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs" onclick='window.excluirSenha("${s.id}")'>Excluir</button>
+      </div>
+    </div>`).join('');
+}
+window.editarSenha = async (id)=>{ const s=senhas.find(x=>x.id===id); if(!s) return; const novo = prompt('Novo nome:', s.nome); if(novo && novo.trim()!==s.nome){ s.nome = novo.trim(); await window.dataSdk.update(s); toast('Senha atualizada!','success'); } };
+window.excluirSenha = async (id)=>{ const s=senhas.find(x=>x.id===id); if(!s) return; if(confirm(`Excluir a senha ${codigoDisplay(s)} de ${s.nome}?`)){ await window.dataSdk.delete(s.id); toast('Senha excluída!','success'); } };
+window.imprimirPorId = (id)=>{ const s=senhas.find(x=>x.id===id); if(s) imprimirSenha(s); };
+
+/* TV: controle de chamadas novas */
+const TV_PROGRESS_KEY = 'cadunico_tv_progress_v1';
+const TV_PROGRESS_MAX = 600;
+let tvSeen = new Set();
+let tvLastChamadoMs = 0;
+
+function loadTvProgress(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(TV_PROGRESS_KEY) || 'null');
+    const hoje = todayStr();
+    if(!raw || raw.day !== hoje){
+      return { seen:new Set(), lastMs:0 };
+    }
+    const seen = new Set(Array.isArray(raw.seen) ? raw.seen : []);
+    const lastMs = Number(raw.lastMs || 0) || 0;
+    return { seen, lastMs };
+  }catch(_){
+    return { seen:new Set(), lastMs:0 };
+  }
+}
+
+function saveTvProgress(){
+  try{
+    const seenArr = Array.from(tvSeen);
+    if(seenArr.length > TV_PROGRESS_MAX){
+      const cut = seenArr.slice(seenArr.length - TV_PROGRESS_MAX);
+      tvSeen = new Set(cut);
+    }
+    localStorage.setItem(TV_PROGRESS_KEY, JSON.stringify({
+      day: todayStr(),
+      seen: Array.from(tvSeen),
+      lastMs: tvLastChamadoMs
+    }));
+  }catch(_){ }
+}
+
+function markTvSeen(s){
+  const key = tvKey(s);
+  tvSeen.add(key);
+  const ms = new Date(s?.chamadoEm || 0).getTime();
+  if(isFinite(ms) && ms > tvLastChamadoMs){
+    tvLastChamadoMs = ms;
+  }
+  saveTvProgress();
+}
+
+function primeTvSeen(){
+  const state = loadTvProgress();
+  tvSeen = state.seen;
+  tvLastChamadoMs = state.lastMs;
+
+  if(tvSeen.size) return;
+
+  const atuais = (senhas || [])
+    .filter(s => s.chamadoEm && s.guiche)
+    .sort((a,b) => new Date(a.chamadoEm) - new Date(b.chamadoEm));
+
+  if(atuais.length){
+    atuais.forEach(s => tvSeen.add(tvKey(s)));
+    const ultimoMs = new Date(atuais[atuais.length - 1].chamadoEm || 0).getTime();
+    tvLastChamadoMs = isFinite(ultimoMs) ? ultimoMs : Date.now();
+  }else{
+    tvLastChamadoMs = 0;
+  }
+  saveTvProgress();
+}
+function processaChamadasNovas(){
+  if (telaAtiva !== 'tv') return;
+
+  const novosOrd = (senhas || [])
+    .filter(s => s.chamadoEm && s.guiche && !tvSeen.has(tvKey(s)))
+    .sort((a,b) => new Date(a.chamadoEm) - new Date(b.chamadoEm));
+  for (const s of novosOrd){
+    markTvSeen(s);
+    enqueuePresentation(s);
+  }
+}
+const DEDUP_TV_KEY = 'id';
+
+function ultimosParaTV(rows, limit = 16){
+  const arr2 = (rows || [])
+    .filter(s => s.chamadoEm && s.guiche)
+    .sort((a,b) => new Date(b.chamadoEm) - new Date(a.chamadoEm));
+
+  const seen = new Set();
+  const out = [];
+  for (const s of arr2){
+    const key = (DEDUP_TV_KEY === 'numero') ? String(s.numero) : String(s.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function atualizarGridChamadas(){
+  const cont = byId('grid-chamadas');
+  const sem  = byId('sem-chamadas');
+
+  const ult = ultimosParaTV(senhas, 16);
+
+  if (!ult.length){
+    cont.classList.add('hidden');
+    sem.classList.remove('hidden');
+    cont.innerHTML = '';
+    return;
+  }
+
+  cont.classList.remove('hidden');
+  sem.classList.add('hidden');
+
+  cont.innerHTML = ult.map((c, i) => {
+    const hora = c.chamadoEm ? new Date(c.chamadoEm).toLocaleTimeString('pt-BR') : '';
+    if (i === 0){
+      return `<div class="col-span-2 row-span-2 bg-blue-100 border-4 border-blue-500 rounded-xl p-6 shadow-xl">
+        <div class="text-center">
+          <div class="text-6xl font-black text-blue-800">${codigoDisplay(c)}</div>
+          <div class="text-2xl font-bold text-slate-800 mt-2">${c.nome}</div>
+          <div class="text-3xl font-black text-blue-600 mt-1">GUICHÊ ${c.guiche}</div>
+          <div class="text-sm text-slate-500 mt-2">ÚLTIMO CHAMADO • ${hora}</div>
+        </div>
+      </div>`;
+    }
+    return `<div class="bg-white border-2 border-slate-200 rounded-lg p-3 shadow">
+      <div class="text-center">
+        <div class="text-2xl font-bold">${codigoDisplay(c)}</div>
+        <div class="text-sm">${c.nome}</div>
+        <div class="text-base font-semibold text-slate-600">G${c.guiche}</div>
+        <div class="text-[11px] text-slate-500 mt-1">${hora}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* Diversos */
+function restaurarGuichesPersistidos(){
+  const saved = parseInt(localStorage.getItem(GUICHES_KEY)||'6',10) || 6;
+  const opts = Array.from(byId('numero-guiches').options).map(o=>o.value);
+  if(opts.includes(String(saved))){
+    byId('numero-guiches').value = String(saved);
+    byId('wrap-guiches-custom').classList.add('hidden');
+  }else{
+    byId('numero-guiches').value = 'custom';
+    byId('wrap-guiches-custom').classList.remove('hidden');
+    byId('numero-guiches-custom').value = saved;
+  }
+  atualizarGuiches();
+}
+function atualizarGuiches(){
+  const sel = byId('numero-guiches').value;
+  const n = (sel==='custom') ? (parseInt(byId('numero-guiches-custom').value,10)||6) : (parseInt(sel,10)||6);
+  const s = byId('numero-guiche');
+  s.innerHTML='';
+  for(let i=1;i<=n;i++){ const op=document.createElement('option'); op.value=i; op.textContent=`Guichê ${i}`; s.appendChild(op); }
+
+  const locked = getLockedGuiche();
+  let pref = parseInt(localStorage.getItem(GUICHE_PREF_KEY) || '1', 10);
+  if(!Number.isFinite(pref) || pref<1) pref=1;
+  let target = locked || Math.min(pref, n);
+  s.value = String(target);
+  safeText('guiche-historico-numero', s.value);
+}
+function atualizarDataHora(){
+  const s=new Date().toLocaleString('pt-BR',{weekday:'long',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  if(byId('data-hora')) byId('data-hora').textContent=s;
+}
+function syncPrintFromInputs(){
+  setPrintCfg({
+    widthMm:     parseFloat(byId('print-width').value)||72,
+    fontPx:      parseInt(byId('print-font').value,10)||12,
+    marginTopMm: parseFloat(byId('print-mt').value)||0,
+    marginBottomMm: parseFloat(byId('print-mb').value)||0,
+    gapPx:       parseInt(byId('print-gap').value,10)||1,
+    orgao:       byId('print-orgao').value||defaultConfig.nome_orgao
+  });
+}
+function exportarDados(){
+  const dados={senhas, dataExportacao:new Date().toISOString()};
+  exportarJSON(dados, `dados-cadunico-${new Date().toISOString().slice(0,10)}.json`);
+}
+function exportarJSON(obj, filename){
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  toast('Arquivo gerado.','success');
+}
+function exportarCSV(rows, filename){
+  if(!rows?.length){ toast('Sem dados para exportar.','info'); return; }
+  const headers = Object.keys(rows[0]);
+  const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const lines = [headers.join(',')].concat(rows.map(o=>headers.map(h=>esc(o[h])).join(',')));
+  const csv = lines.join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  toast('CSV exportado!','success');
+}
+function todayStr(){
+  const d=new Date(); const yyyy=d.getFullYear(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${yyyy}-${mm}-${dd}`;
+}
+
+/* Busca (CPF/Nome) */
+let lastBuscaCPF = [];
+function renderBuscaCPF(lista, termo){
+  lastBuscaCPF = Array.isArray(lista) ? lista : [];
+  const c = byId('resultado-cpf');
+  const resumo = byId('resumo-pessoa');
+  const rNome = byId('resumo-nome');
+  const rCPF  = byId('resumo-cpf');
+  const rTot  = byId('resumo-total');
+  const rStat = byId('resumo-status');
+
+  if(!lastBuscaCPF.length){
+    c.innerHTML = '<div class="p-4 text-center text-slate-500">Nenhum registro encontrado.</div>';
+    byId('btn-exportar-cpf').disabled = true;
+    resumo.classList.add('hidden');
+    return;
+  }
+
+  const ultimo = [...lastBuscaCPF].sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp))[0];
+  const nome = (ultimo.nome||'').trim() || '—';
+  const cpf  = (ultimo.cpf||'').trim() || (onlyDigits(termo).length===11 ? termo : '—');
+  rNome.textContent = `Nome: ${nome}`;
+  rCPF.textContent  = `CPF: ${cpf||'—'}`;
+  rTot.textContent  = `Registros: ${lastBuscaCPF.length}`;
+  rStat.textContent = `Último status: ${mapStatus(ultimo.status)}`;
+  resumo.classList.remove('hidden');
+
+  byId('btn-exportar-cpf').disabled = false;
+
+  c.innerHTML = lastBuscaCPF.map(o=>{
+    const foiGuiche = !!(o.guiche && o.chamadoEm);
+    const statusTxt = mapStatus(o.status);
+    const espera = o.tempoEspera ? `${o.tempoEspera} min`
+                  : (o.status==='aguardando' ? `${diffMin(o.timestamp, now())} min (aguardando)` : '—');
+    const atendi  = o.tempoAtendimento ? `${o.tempoAtendimento} min`
+                  : (o.status==='atendendo' ? `${diffMin(o.iniciadoEm, now())} min (em andamento)` : '—');
+
+    const chipStatus = o.status==='atendida' ? 'chip-green'
+                      : o.status==='aguardando' ? 'chip-yellow'
+                      : o.status==='nao_compareceu' ? 'chip-red'
+                      : 'chip-blue';
+
+    return `<div class="p-3 flex flex-col gap-2 clickable item-res" data-obj='${JSON.stringify(o)}'>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="chip ${chipStatus}">${statusTxt}</span>
+        <span class="chip chip-gray">Senha: ${codigoDisplay(o)}</span>
+        <span class="chip chip-gray">Tipo: ${TIPO_TXT[o.tipo||'normal']}</span>
+        <span class="chip ${foiGuiche?'chip-green':'chip-red'}">Foi ao guichê: ${foiGuiche?'Sim':'Não'}</span>
+        ${o.guiche?`<span class="chip chip-blue">Guichê: ${o.guiche}</span>`:''}
+      </div>
+      <div class="text-sm">
+        ${o.bairro ? `<div><b>Bairro:</b> ${o.bairro}</div>` : ''}
+        <div><b>Serviço:</b> ${o.servico||'—'}</div>
+        <div class="text-slate-600">Criado: ${fmt(o.timestamp)} • Chamado: ${fmt(o.chamadoEm)} • Início: ${fmt(o.iniciadoEm)} • Fim: ${fmt(o.finalizadoEm)}</div>
+        <div class="text-slate-600">Tempo de espera: <b>${espera}</b> • Tempo de atendimento: <b>${atendi}</b></div>
+      </div>
+      <div class="text-xs text-slate-400">ID: ${o.id}</div>
+    </div>`;
+  }).join('');
+
+  c.onclick = (ev)=>{
+    const row = ev.target.closest('.item-res');
+    if(!row) return;
+    const obj = JSON.parse(row.dataset.obj || '{}');
+    abrirDetalhe(obj);
+  };
+}
+
+function mapStatus(s){
+  return ({aguardando:'Aguardando', chamando:'Chamando', atendendo:'Em atendimento', atendida:'Atendida', nao_compareceu:'Não compareceu'})[s] || s || '—';
+}
+function exportarListaCPF(){
+  const rows = lastBuscaCPF.map(o=>{
+    const foiGuiche = !!(o.guiche && o.chamadoEm);
+    const esperaAtual = o.tempoEspera ? o.tempoEspera
+                       : (o.status==='aguardando' ? diffMin(o.timestamp, now()) : '');
+    const atendAtual  = o.tempoAtendimento ? o.tempoAtendimento
+                       : (o.status==='atendendo' ? diffMin(o.iniciadoEm, now()) : '');
+    return {
+      id:o.id, numero:codigoDisplay(o), nome:o.nome, cpf:o.cpf, bairro:o.bairro, tipo:o.tipo, servico:o.servico, status:o.status,
+      timestamp:o.timestamp, chamadoEm:o.chamadoEm, iniciadoEm:o.iniciadoEm, finalizadoEm:o.finalizadoEm,
+      guiche:o.guiche, tempoEspera:o.tempoEspera||esperaAtual, tempoAtendimento:o.tempoAtendimento||atendAtual, data:o.data,
+      foiGuiche: foiGuiche ? 'Sim':'Não'
+    };
+  });
+  const d = todayStr();
+  exportarCSV(rows, `busca-${d}.csv`);
+}
+
+/* Estatísticas (período) */
+function presetPeriodoRapido(p){
+  const hoje = new Date(); const yyyy = hoje.getFullYear();
+  const mm = String(hoje.getMonth()+1).padStart(2,'0');
+  const dd = String(hoje.getDate()).padStart(2,'0');
+  const set = (de,ate)=>{ byId('de').value=de; byId('ate').value=ate; };
+  if(p==='hoje'){ set(`${yyyy}-${mm}-${dd}`, `${yyyy}-${mm}-${dd}`); }
+  else if(p==='7d'){ const d = new Date(hoje); d.setDate(d.getDate()-6); set(d.toISOString().slice(0,10), `${yyyy}-${mm}-${dd}`); }
+  else if(p==='30d'){ const d = new Date(hoje); d.setDate(d.getDate()-29); set(d.toISOString().slice(0,10), `${yyyy}-${mm}-${dd}`); }
+  else if(p==='mes'){ const first = new Date(yyyy, hoje.getMonth(), 1); set(first.toISOString().slice(0,10), `${yyyy}-${mm}-${dd}`); }
+  byId('periodo-rapido').value = p;
+}
+on(document,'change', (e)=>{
+  if(e.target?.id==='periodo-rapido'){
+    const v = e.target.value;
+    if(v!=='personalizado') presetPeriodoRapido(v);
+  }
+});
+on(byId('btn-aplicar-periodo'),'click', carregarEstatisticas);
+
+async function carregarEstatisticas(){
+  const de = byId('de').value || '';
+  const ate = byId('ate').value || '';
+  try{
+    const data = await window.dataSdk.getPeriodo(de,ate);
+    renderEstatisticas(data||[]);
+  }catch(e){
+    toast('Falha ao carregar estatísticas.','error');
+  }
+}
+function renderEstatisticas(rows){
+  const total = rows.length;
+  const atendidas = rows.filter(x=>x.status==='atendida').length;
+  const noShow = rows.filter(x=>x.status==='nao_compareceu').length;
+  const esperas = rows.map(x=>Number(x.tempoEspera||0)).filter(n=>isFinite(n)&&n>0);
+  const atends = rows.map(x=>Number(x.tempoAtendimento||0)).filter(n=>isFinite(n)&&n>0);
+  const mediaEspera = esperas.length ? Math.round(esperas.reduce((a,b)=>a+b,0)/esperas.length) : 0;
+  const mediaAtend  = atends.length ? Math.round(atends.reduce((a,b)=>a+b,0)/atends.length) : 0;
+
+  byId('kpis').innerHTML = [
+    {t:'Total',v:total},
+    {t:'Atendidas',v:atendidas},
+    {t:'Não Compareceu',v:noShow},
+    {t:'Espera Média (min)',v:mediaEspera},
+    {t:'Atendimento Médio (min)',v:mediaAtend},
+    {t:'Aguardando',v:rows.filter(x=>x.status==='aguardando').length},
+    {t:'Em Atendimento',v:rows.filter(x=>x.status==='atendendo' || x.status==='chamando').length},
+    {t:'Serviços distintos',v:new Set(rows.map(x=>x.servico||'')).size}
+  ].map(k=>`<div class="card p-4"><div class="text-slate-500 text-sm">${k.t}</div><div class="text-2xl font-bold">${k.v}</div></div>`).join('');
+
+  const countBy = (arr, keyFn)=>arr.reduce((m,x)=>{const k=keyFn(x); m[k]=(m[k]||0)+1; return m;}, {});
+
+  const porGuiche = countBy(rows.filter(x=>x.guiche), x=>String(x.guiche));
+  byId('stat-guiche').innerHTML = renderBars(porGuiche);
+
+  const porTipo = countBy(rows, x=>TIPO_TXT[x.tipo||'normal']);
+  byId('stat-tipo').innerHTML = renderBars(porTipo);
+
+  const porServico = countBy(rows, x=>x.servico||'—');
+  const topServ = Object.entries(porServico).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  byId('stat-servico').innerHTML = renderBars(Object.fromEntries(topServ));
+
+  // NOVO: Atendimentos por Bairro no período
+  const porBairro = countBy(rows.filter(x=>x.bairro), x=>x.bairro);
+  const topBairros = Object.entries(porBairro).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  byId('stat-bairro').innerHTML = renderBars(Object.fromEntries(topBairros));
+
+  const porHora = Array.from({length:24},(_,h)=>[String(h).padStart(2,'0')+'h',0]).reduce((m,[k,v])=>{m[k]=v;return m;}, {});
+  rows.forEach(x=>{
+    if(!x.timestamp) return; try{ const h = new Date(x.timestamp).getHours(); const k=String(h).padStart(2,'0')+'h'; porHora[k]=(porHora[k]||0)+1; }catch(_){}
+  });
+  byId('stat-hora').innerHTML = renderBars(porHora);
+}
+function renderBars(obj){
+  const entries = Object.entries(obj); if(!entries.length) return '<div class="text-sm text-slate-500">Sem dados.</div>';
+  const max = Math.max(...entries.map(([,v])=>v)) || 1;
+  return entries.map(([k,v])=>{
+    const pct = Math.round((v/max)*100);
+    return `<div>
+      <div class="flex justify-between text-sm"><span>${k}</span><span class="font-semibold">${v}</span></div>
+      <div class="bar"><i style="width:${pct}%;"></i></div>
+    </div>`;
+  }).join('');
+}
+
+/* Monitor ao vivo (Admin) */
+function renderMonitor(){
+  const body = byId('monitor-body');
+  const sel = byId('numero-guiches').value;
+  const n = (sel==='custom') ? (parseInt(byId('numero-guiches-custom').value,10)||6) : (parseInt(sel,10)||6);
+  const linhas=[];
+  for(let g=1; g<=n; g++){
+    const atual = obterAtendimentoDoGuiche(String(g));
+    if(atual){
+      const desde = atual.iniciadoEm || atual.chamadoEm;
+      const mins = desde ? diffMin(desde, now()) : 0;
+      const status = atual.status==='atendendo' ? 'Em atendimento' : 'Chamando';
+      linhas.push(`<tr>
+        <td class="p-2">Guichê ${g}</td>
+        <td class="p-2">${status}</td>
+        <td class="p-2 font-semibold">${codigoDisplay(atual)}</td>
+        <td class="p-2">${atual.nome}</td>
+        <td class="p-2">${mins} min</td>
+        <td class="p-2">${atual.calls || '-'}</td>
+      </tr>`);
+    }else{
+      linhas.push(`<tr>
+        <td class="p-2">Guichê ${g}</td>
+        <td class="p-2 text-slate-500">Livre</td>
+        <td class="p-2">—</td>
+        <td class="p-2">—</td>
+        <td class="p-2">—</td>
+        <td class="p-2">—</td>
+      </tr>`);
+    }
+  }
+  body.innerHTML = linhas.join('');
+}
+
+/* PERSISTÊNCIA DE CONFIG */
+function buildConfigSnapshot(){
+  const ordem = localStorage.getItem(ORDER_KEY) || 'P,N,G';
+  const services = loadServices();
+  const guiches = parseInt(localStorage.getItem(GUICHES_KEY)||'6',10) || 6;
+  const audio = getAudioCfg();
+  const print = getPrintCfg();
+  const bairros = getBairros();
+  const tvPin   = tvPinConfig || String(localStorage.getItem(TVPIN_KEY)||'').trim();
+  return {
+    meta: { version: 1, exportedAt: new Date().toISOString() },
+    config: {
+      titulo_sistema: byId('titulo-sistema')?.textContent || defaultConfig.titulo_sistema,
+      nome_orgao: byId('print-orgao')?.value || defaultConfig.nome_orgao,
+      mensagem_aguarde: defaultConfig.mensagem_aguarde,
+      audio, print, ordem, services, guiches, bairros, tvPin
+    }
+  };
+}
+
+function persistLocalFromConfig(cfg){
+  if(!cfg) return;
+  if(cfg.audio) setAudioCfg(cfg.audio);
+  if(cfg.print) setPrintCfg(cfg.print);
+  if(cfg.ordem){
+    localStorage.setItem(ORDER_KEY, cfg.ordem);
+    orderSeqCache = cfg.ordem;
+    safeText('ordem-atual', cfg.ordem.split(',').join(' – '));
+    safeSet('ordem-preset', cfg.ordem);
+    safeSet('ordem-custom', cfg.ordem);
+    atualizarProximasSenhas();
+  }
+  if(Array.isArray(cfg.services)){
+    saveServices(cfg.services);
+    carregarServicos(); carregarServicosAdmin();
+  }
+  if(Array.isArray(cfg.bairros)){
+    saveBairrosLocal(cfg.bairros);
+  }
+  if(typeof cfg.tvPin === 'string'){
+    setTvPinLocal(cfg.tvPin);
+  }
+  if(cfg.guiches){
+    localStorage.setItem(GUICHES_KEY, String(parseInt(cfg.guiches,10)||6));
+    restaurarGuichesPersistidos();
+    applyGuicheLockUI();
+  }
+  if(cfg.titulo_sistema) safeText('titulo-sistema', cfg.titulo_sistema);
+  if(cfg.nome_orgao){
+    safeSet('print-orgao', cfg.nome_orgao);
+    syncPrintFromInputs();
+  }
+}
+
+async function applyImportedConfig(obj, skipSave=false){
+  const cfg = obj?.config ? obj.config : obj;
+  if(!cfg || typeof cfg !== 'object') throw new Error('Config inválida');
+
+  persistLocalFromConfig(cfg);
+  if(!skipSave){
+    try{ await window.dataSdk.saveConfig(cfg); }catch(_){}
+  }
+}
+window.applyImportedConfig = applyImportedConfig;
+</script>
+
+<!-- FALLBACKS DE CLIQUE (garantia de funcionamento) -->
+<script>
+  window._buscarCpf = async function(){
+    const q = document.getElementById('busca-cpf').value.trim();
+    if(!q){ toast('Digite um CPF ou Nome.','error'); return; }
+    const digits = onlyDigits(q);
+    const btn = document.getElementById('btn-buscar-cpf');
+    await withGuard(btn, 'Buscando...', async ()=>{
+      let res = [];
+      try{
+        if(digits.length === 11){
+          res = await window.dataSdk.searchCPF(digits,'','');
+        }else{
+          if(q.length < 3){ toast('Digite pelo menos 3 letras do nome.','error'); return; }
+          res = await window.dataSdk.searchNome(q,'','');
+        }
+      }catch(_){ res = []; }
+      if((!res || !res.length) && Array.isArray(senhas) && senhas.length){
+        const ql = q.toLowerCase();
+        res = digits.length===11
+          ? senhas.filter(x => onlyDigits(x.cpf) === digits)
+          : senhas.filter(x => String(x.nome||'').toLowerCase().includes(ql));
+      }
+      renderBuscaCPF(res||[], q);
+    });
+  };
+  window._exportarCpf = function(){ exportarListaCPF(); };
+
+  window._adminLimpar = async function(){
+    if(!confirm('Limpar TODAS as senhas de HOJE da planilha? Esta ação não pode ser desfeita.')) return;
+    const r = await window.dataSdk.clearToday();
+    if(!r?.ok){ toast(r?.msg||'Falha ao limpar histórico de hoje.','error'); return; }
+    toast(`Registros de hoje removidos: ${r.removidos||0}`, 'success');
+    await window.dataSdk.refresh();
+  };
+  window._adminReset = async function(){
+    const r = await window.dataSdk.resetCounters();
+    if(!r?.ok){ toast(r?.msg||'Falha ao resetar contadores.','error'); return; }
+    toast('Contadores do dia resetados.', 'success');
+    await window.dataSdk.refresh();
+  };
+  window._adminExportar = async function(){
+    const d = todayStr();
+    let rows = [];
+    try{
+      rows = await window.dataSdk.getPeriodo(d,d);
+    }catch(_){}
+    if(!rows || !rows.length){
+      rows = (senhas||[]).filter(x => (x.data||'').slice(0,10) === d);
+    }
+    if(!rows.length){ toast('Sem dados para exportar hoje.','info'); return; }
+    exportarCSV(rows, `dados-hoje-${d}.csv`);
+  };
+</script>
+
+</body>
+</html>
