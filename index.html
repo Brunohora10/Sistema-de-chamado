@@ -722,6 +722,15 @@
   let refreshInFlight = false;
   let lastDataSignature = '';
 
+  function getPollingIntervalMs(){
+    try{
+      if (typeof telaAtiva === 'string' && (telaAtiva === 'tv' || telaAtiva === 'guiche')){
+        return 900;
+      }
+    }catch(_){ }
+    return 1800;
+  }
+
   function dataSignature(rows){
     if(!Array.isArray(rows)) return '';
     return rows.map(r => [
@@ -755,9 +764,9 @@
       if (poll) clearTimeout(poll);
       const tick = async ()=>{
         try{ await this.refresh(); }catch(_){ }
-        poll = setTimeout(tick, 2500);
+        poll = setTimeout(tick, getPollingIntervalMs());
       };
-      poll = setTimeout(tick, 2500);
+      poll = setTimeout(tick, getPollingIntervalMs());
       return { isOk:true };
     },
     async refresh(opts = {}){
@@ -1717,6 +1726,10 @@ function mostrarTela(t){
   ['tela-recepcao','tela-guiche','tela-tv','tela-admin','tela-estatisticas'].forEach(id=>byId(id).classList.add('hidden'));
   byId(`tela-${t}`).classList.remove('hidden');
   telaAtiva = t;
+
+  if (window.dataSdk?.refresh){
+    window.dataSdk.refresh({ forceNotify:true }).catch(()=>{});
+  }
 
   if (t === 'guiche'){
     applyGuicheLockUI();

@@ -31,7 +31,7 @@ const CALL_DAY_KEY   = 'CALL_DAY';
 const ADMIN_CFG_KEY  = 'ADMIN_CFG_JSON';
 
 /** Cache curto dos dados (melhora polling sem perder consistência) */
-const CACHE_TTL_SEC = 8;
+const CACHE_TTL_SEC = 3;
 const CACHE_ALL_PREFIX = 'ALL_ROWS_';
 const CACHE_DAY_PREFIX = 'DAY_ROWS_';
 
