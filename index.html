@@ -516,14 +516,22 @@
                 </div>
               </div>
 
-              <div class="grid sm:grid-cols-4 gap-2 mb-3 text-sm">
+              <div class="grid sm:grid-cols-3 gap-2 mb-3 text-sm">
                 <div class="p-2 bg-slate-50 border rounded">
-                  <div class="text-slate-500">Latência atual</div>
+                  <div class="text-slate-500">Latência API</div>
                   <div id="lat-last-ms" class="font-semibold">—</div>
                 </div>
                 <div class="p-2 bg-slate-50 border rounded">
-                  <div class="text-slate-500">Latência média</div>
+                  <div class="text-slate-500">Latência média API</div>
                   <div id="lat-avg-ms" class="font-semibold">—</div>
+                </div>
+                <div class="p-2 bg-slate-50 border rounded">
+                  <div class="text-slate-500">Ping de rede</div>
+                  <div id="lat-ping-ms" class="font-semibold">—</div>
+                </div>
+                <div class="p-2 bg-slate-50 border rounded">
+                  <div class="text-slate-500">Delay da chamada</div>
+                  <div id="lat-sync-ms" class="font-semibold">—</div>
                 </div>
                 <div class="p-2 bg-slate-50 border rounded">
                   <div class="text-slate-500">Status de rede</div>
@@ -534,6 +542,7 @@
                   <div id="lat-last-ok" class="font-semibold">—</div>
                 </div>
               </div>
+              <div id="lat-last-err" class="mb-3 text-xs text-red-600"></div>
 
               <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
@@ -738,51 +747,104 @@
     });
   }
 
+  async function callSafeTimed(fn, timeoutMs, ...args){
+    return Promise.race([
+      callSafe(fn, ...args),
+      new Promise(resolve => setTimeout(
+        ()=>resolve({ ok:false, error:`TIMEOUT_${timeoutMs}ms` }),
+        timeoutMs
+      ))
+    ]);
+  }
+
   let poll = null;
   let refreshInFlight = false;
   let lastDataSignature = '';
+  let lastPingAt = 0;
   const latencyStats = {
-    lastMs: 0,
-    avgMs: 0,
+    dataLastMs: 0,
+    dataAvgMs: 0,
+    pingLastMs: 0,
+    pingAvgMs: 0,
+    syncDelayMs: 0,
     samples: 0,
     failCount: 0,
-    lastOkAt: 0
+    lastOkAt: 0,
+    lastErr: ''
   };
 
-  function pushLatencySample(ms, ok){
+  function smoothAvg(prev, cur){
+    if(!prev || prev <= 0) return cur;
+    return Math.round((prev * 0.75) + (cur * 0.25));
+  }
+
+  function pushLatencySample(ms, ok, errMsg=''){
     const t = Number(ms||0);
     if(ok){
-      latencyStats.lastMs = t;
+      latencyStats.dataLastMs = t;
       latencyStats.samples = Math.min(latencyStats.samples + 1, 50);
-      if(latencyStats.avgMs <= 0) latencyStats.avgMs = t;
-      else latencyStats.avgMs = Math.round((latencyStats.avgMs * 0.8) + (t * 0.2));
+      latencyStats.dataAvgMs = smoothAvg(latencyStats.dataAvgMs, t);
       latencyStats.failCount = 0;
       latencyStats.lastOkAt = Date.now();
+      latencyStats.lastErr = '';
     }else{
       latencyStats.failCount = Math.min(latencyStats.failCount + 1, 99);
+      latencyStats.lastErr = String(errMsg || 'Falha na API getAllSenhas');
     }
+  }
+
+  function pushPingSample(ms, ok){
+    const t = Number(ms||0);
+    if(!ok) return;
+    latencyStats.pingLastMs = t;
+    latencyStats.pingAvgMs = smoothAvg(latencyStats.pingAvgMs, t);
+  }
+
+  function updateSyncDelay(rows){
+    if(!Array.isArray(rows) || !rows.length){
+      latencyStats.syncDelayMs = 0;
+      return;
+    }
+    const lastCalled = rows
+      .filter(x => x && x.chamadoEm)
+      .map(x => new Date(x.chamadoEm).getTime())
+      .filter(v => isFinite(v))
+      .sort((a,b)=>b-a)[0];
+
+    if(!lastCalled){
+      latencyStats.syncDelayMs = 0;
+      return;
+    }
+    latencyStats.syncDelayMs = Math.max(0, Date.now() - lastCalled);
   }
 
   function renderLatencyAdmin(){
     const last = byId('lat-last-ms');
     const avg = byId('lat-avg-ms');
+    const ping = byId('lat-ping-ms');
+    const sync = byId('lat-sync-ms');
     const st  = byId('lat-net-status');
     const ok  = byId('lat-last-ok');
-    if(!last || !avg || !st || !ok) return;
+    const er  = byId('lat-last-err');
+    if(!last || !avg || !ping || !sync || !st || !ok || !er) return;
 
-    last.textContent = latencyStats.lastMs ? `${latencyStats.lastMs} ms` : '—';
-    avg.textContent  = latencyStats.avgMs  ? `${latencyStats.avgMs} ms`  : '—';
+    last.textContent = latencyStats.dataLastMs ? `${latencyStats.dataLastMs} ms` : '—';
+    avg.textContent  = latencyStats.dataAvgMs  ? `${latencyStats.dataAvgMs} ms`  : '—';
+    ping.textContent = latencyStats.pingLastMs ? `${latencyStats.pingLastMs} ms` : '—';
+    sync.textContent = latencyStats.syncDelayMs ? `${Math.round(latencyStats.syncDelayMs/1000)} s` : '—';
 
     let statusTxt = 'Sem dados';
     if(latencyStats.failCount >= 2) statusTxt = 'Instável';
-    else if(latencyStats.avgMs > 1500) statusTxt = 'Lenta';
-    else if(latencyStats.avgMs > 700) statusTxt = 'Média';
-    else if(latencyStats.avgMs > 0) statusTxt = 'Boa';
+    else if(latencyStats.dataAvgMs > 2200 || latencyStats.pingAvgMs > 900) statusTxt = 'Lenta';
+    else if(latencyStats.dataAvgMs > 1200 || latencyStats.pingAvgMs > 500) statusTxt = 'Média';
+    else if(latencyStats.dataAvgMs > 0) statusTxt = 'Boa';
     st.textContent = statusTxt;
 
     ok.textContent = latencyStats.lastOkAt
       ? new Date(latencyStats.lastOkAt).toLocaleTimeString('pt-BR')
       : '—';
+
+    er.textContent = latencyStats.lastErr ? `Último erro: ${latencyStats.lastErr}` : '';
   }
 
   function getPollingIntervalMs(){
@@ -821,16 +883,28 @@
             }
           }catch(_){ }
         })(),
+        this.ping(),
         this.refresh({ forceNotify:true })
       ]);
 
       if (poll) clearTimeout(poll);
       const tick = async ()=>{
+        if (Date.now() - lastPingAt > 5000){
+          try{ await this.ping(); }catch(_){ }
+        }
         try{ await this.refresh(); }catch(_){ }
         poll = setTimeout(tick, getPollingIntervalMs());
       };
       poll = setTimeout(tick, getPollingIntervalMs());
       return { isOk:true };
+    },
+    async ping(){
+      const t0 = Date.now();
+      const r = await callSafeTimed('healthCheck', 3500);
+      pushPingSample(Date.now() - t0, !!(r && r.ok));
+      lastPingAt = Date.now();
+      renderLatencyAdmin();
+      return { isOk: !!(r && r.ok) };
     },
     async refresh(opts = {}){
       if(refreshInFlight){
@@ -838,11 +912,12 @@
       }
       refreshInFlight = true;
       const t0 = Date.now();
-      const r = await callSafe('getAllSenhas');
+      const r = await callSafeTimed('getAllSenhas', 12000);
       try{
-        pushLatencySample(Date.now() - t0, !!(r && r.ok));
+        pushLatencySample(Date.now() - t0, !!(r && r.ok), r?.error || 'Falha desconhecida');
         renderLatencyAdmin();
         if (r && r.ok && Array.isArray(r.value) && this.h?.onDataChanged){
+          updateSyncDelay(r.value);
           const sig = dataSignature(r.value);
           if (opts.forceNotify || sig !== lastDataSignature){
             lastDataSignature = sig;

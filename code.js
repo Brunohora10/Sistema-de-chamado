@@ -45,6 +45,9 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 function __auth() { const s = _sheet(); s.getLastRow(); return 'ok'; }
+function healthCheck(){
+  return { ok:true, ts:_nowIso(), epoch:Date.now() };
+}
 
 /* ============== HELPERS PLANILHA ============== */
 function _ss() {
